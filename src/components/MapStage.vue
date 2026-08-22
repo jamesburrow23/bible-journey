@@ -47,7 +47,7 @@ function showMarkersUpTo(step: number): void {
   });
 }
 
-function renderStep(step: number, animate: boolean): void {
+function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   if (!map || !ready || !props.journey) return;
   cancelAnimationFrame(animFrame);
   const stops = props.journey.stops;
@@ -75,11 +75,13 @@ function renderStep(step: number, animate: boolean): void {
   }
 
   // Camera
-  if (clamped === 0) {
-    map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration: 800 });
-  } else {
-    const [from, to] = legs[clamped - 1] as [LngLat, LngLat];
-    map.fitBounds(new maplibregl.LngLatBounds(from, from).extend(to), { padding: 120, duration: 800, maxZoom: 9 });
+  if (moveCamera) {
+    if (clamped === 0) {
+      map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration: 800 });
+    } else {
+      const [from, to] = legs[clamped - 1] as [LngLat, LngLat];
+      map.fitBounds(new maplibregl.LngLatBounds(from, from).extend(to), { padding: 120, duration: 800, maxZoom: 9 });
+    }
   }
 }
 
@@ -122,7 +124,7 @@ onMounted(async () => {
       });
     }
     ready = true;
-    if (props.journey) { fitJourney(); renderStep(props.stepIndex, false); }
+    if (props.journey) { fitJourney(); renderStep(props.stepIndex, false, false); }
   });
 });
 
@@ -131,16 +133,16 @@ onBeforeUnmount(() => { cancelAnimationFrame(animFrame); map?.remove(); });
 watch(() => props.journey?.id, () => {
   if (!ready) return;
   clearAll();
-  if (props.journey) { fitJourney(); renderStep(0, false); }
+  if (props.journey) { fitJourney(); renderStep(0, false, false); }
 });
 
 // Re-render on any stop edit (coords, names) without animation.
 watch(() => JSON.stringify(props.journey?.stops ?? []), () => {
-  if (ready && props.journey) renderStep(props.stepIndex, false);
+  if (ready && props.journey) renderStep(props.stepIndex, false, false);
 });
 
 watch(() => props.stepIndex, (n, o) => {
-  if (ready) renderStep(n, n === (o ?? 0) + 1);
+  if (ready) renderStep(n, n === (o ?? 0) + 1, true);
 });
 </script>
 
