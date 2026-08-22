@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+:root {
+  --chrome: #221b10;
+  --panel: #2b2317;
+  --panel-2: #332a1b;
+  --line: #453a26;
+  --ink: #e8dcc3;
+  --muted: #9c8e72;
+  --faint: #6e6349;
+  --parchment: #e8dbb7;
+  --water: #a9c2b4;
+  --route: #a93226;
+  --gold: #b08d4f;
+  --map-ink: #4a3b22;
+  --ok: #6e8b5e;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--chrome);
+  color: var(--ink);
+  font-family: 'Alegreya Sans', system-ui, sans-serif;
+  font-size: 15px;
+}
+
+.font-fell { font-family: 'IM Fell English', serif; }
+.font-fell-sc { font-family: 'IM Fell English SC', serif; }
+.font-mono-num { font-family: 'IBM Plex Mono', monospace; }
+
+textarea, input[type='text'], input[type='password'] {
+  width: 100%;
+  background: var(--chrome);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 14px;
+}
+textarea:focus, input:focus { outline: 2px solid var(--gold); outline-offset: -1px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 14px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+}
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.btn-primary { background: var(--route); border-color: #7e241b; color: #f6e9d8; }
+.btn-primary:hover { background: #b93c2f; }
+
+.sec-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
