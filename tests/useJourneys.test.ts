@@ -75,6 +75,17 @@ describe('useJourneys', () => {
     expect(j.journeys.value[0].name).toBe('A-imported');
   });
 
+  it('importJson resyncs activeJourney when the active journey is re-imported', () => {
+    const j = useJourneys();
+    j.startJourney('A', 't', stops());
+    j.saveActive();
+    const dump = j.exportAll();
+    const parsed = JSON.parse(dump);
+    parsed[0].name = 'A-renamed';
+    j.importJson(JSON.stringify(parsed));
+    expect(j.activeJourney.value?.name).toBe('A-renamed');
+  });
+
   it('importJson rejects malformed input', () => {
     const j = useJourneys();
     expect(() => j.importJson('{"not":"an array"}')).toThrow('Invalid journey file');

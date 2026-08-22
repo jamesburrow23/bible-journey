@@ -5,7 +5,11 @@ import type { Journey } from '../types';
 const props = defineProps<{ journey: Journey | null; stepIndex: number; playing: boolean }>();
 const emit = defineEmits<{ next: []; prev: []; 'toggle-play': [] }>();
 
-const stop = computed(() => props.journey?.stops[props.stepIndex] ?? null);
+const stop = computed(() => {
+  const stops = props.journey?.stops;
+  if (!stops || !stops.length) return null;
+  return stops[Math.min(props.stepIndex, stops.length - 1)] ?? null;
+});
 const count = computed(() => props.journey?.stops.length ?? 0);
 </script>
 

@@ -87,6 +87,10 @@ export function useJourneys() {
       if (i >= 0) { js.value[i] = imported; updated++; }
       else { js.value.push(imported); added++; }
     }
+    if (active.value) {
+      const fresh = js.value.find((j) => j.id === active.value!.id);
+      if (fresh) active.value = fresh;
+    }
     return { added, updated };
   }
 

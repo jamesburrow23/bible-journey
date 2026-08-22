@@ -11,6 +11,7 @@ const { startJourney } = useJourneys();
 const passage = ref('');
 const busy = ref(false);
 const error = ref('');
+const errorDetail = ref('');
 
 const promptText = computed({
   get: () => settings.value.customPrompt ?? DEFAULT_PROMPT,
@@ -19,6 +20,7 @@ const promptText = computed({
 
 async function extract(): Promise<void> {
   error.value = '';
+  errorDetail.value = '';
   if (!passage.value.trim()) { error.value = 'Paste a passage first.'; return; }
   busy.value = true;
   try {
@@ -26,6 +28,7 @@ async function extract(): Promise<void> {
     startJourney(name, passage.value, stops);
   } catch (e) {
     error.value = e instanceof GeminiError ? e.userMessage : 'Something went wrong — try again.';
+    errorDetail.value = e instanceof GeminiError && e.message !== e.userMessage ? e.message : '';
   } finally {
     busy.value = false;
   }
@@ -44,6 +47,13 @@ async function extract(): Promise<void> {
     </details>
 
     <p v-if="error" class="mt-2 text-sm" style="color: #d8846f">{{ error }}</p>
+    <details v-if="errorDetail" class="mt-1">
+      <summary class="cursor-pointer text-xs" style="color: var(--faint)">Show raw response</summary>
+      <pre
+        class="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs select-text"
+        style="color: var(--faint)"
+      >{{ errorDetail }}</pre>
+    </details>
 
     <div class="mt-3 flex gap-2">
       <button class="btn btn-primary" :disabled="busy" @click="extract">

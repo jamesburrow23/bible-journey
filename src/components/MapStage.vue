@@ -13,6 +13,7 @@ let map: maplibregl.Map | null = null;
 let markers: maplibregl.Marker[] = [];
 let ready = false;
 let animFrame = 0;
+let suppressNextStepCamera = false;
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -51,6 +52,12 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   if (!map || !ready || !props.journey) return;
   cancelAnimationFrame(animFrame);
   const stops = props.journey.stops;
+  if (!stops.length) {
+    setSource('legs-static', []);
+    setSource('leg-active', []);
+    showMarkersUpTo(-1);
+    return;
+  }
   const legs = legsFromStops(stops);
   const clamped = Math.min(step, stops.length - 1);
   const staticCount = animate ? clamped - 1 : clamped;
@@ -132,6 +139,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(animFrame); map?.remove(); });
 
 watch(() => props.journey?.id, () => {
   if (!ready) return;
+  suppressNextStepCamera = true;
   clearAll();
   if (props.journey) { fitJourney(); renderStep(0, false, false); }
 });
@@ -142,7 +150,9 @@ watch(() => JSON.stringify(props.journey?.stops ?? []), () => {
 });
 
 watch(() => props.stepIndex, (n, o) => {
-  if (ready) renderStep(n, n === (o ?? 0) + 1, true);
+  const moveCam = !suppressNextStepCamera;
+  suppressNextStepCamera = false;
+  if (ready) renderStep(n, n === (o ?? 0) + 1, moveCam);
 });
 </script>
 
