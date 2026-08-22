@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, getCurrentInstance, onUnmounted } from 'vue';
 
 export const PLAY_INTERVAL_MS = 1600;
 
@@ -6,6 +6,8 @@ export function usePlayback(stopCount: () => number) {
   const stepIndex = ref(0);
   const playing = ref(false);
   let timer: ReturnType<typeof setInterval> | null = null;
+
+  if (getCurrentInstance()) onUnmounted(stopTimer);
 
   function clamp(n: number): number {
     return Math.min(Math.max(0, stopCount() - 1), Math.max(0, n));
