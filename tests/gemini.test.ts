@@ -71,4 +71,17 @@ describe('extractStops', () => {
       userMessage: expect.stringContaining('quota'),
     });
   });
+
+  it('maps fetch rejection (TypeError) to network error message', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('fetch failed'));
+    await expect(extractStops('p', 'x', 'K', 'm')).rejects.toMatchObject({
+      userMessage: expect.stringContaining('Network'),
+    });
+  });
+
+  it('does not retry on 403 (auth error)', async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 403, json: async () => ({}) } as Response);
+    await expect(extractStops('p', 'x', 'BAD', 'm')).rejects.toThrow(GeminiError);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
 });
