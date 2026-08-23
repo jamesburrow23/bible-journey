@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { legPathsFromStops, slicePath, legLineString, type LngLat } from '../src/services/route';
+import { legPathsFromStops, slicePath, legLineString, pathLength, pointAlong, type LngLat } from '../src/services/route';
 import type { Stop, Waypoint } from '../src/types';
 
 const stop = (name: string, lat: number, lng: number, via?: Waypoint[]): Stop => ({
@@ -68,6 +68,29 @@ describe('slicePath', () => {
   it('clamps t outside [0,1]', () => {
     expect(slicePath(path, -1)).toEqual([[0, 0], [0, 0]]);
     expect(slicePath(path, 2)).toEqual(path);
+  });
+});
+
+describe('pointAlong', () => {
+  it('travels north with bearing 0 and east with bearing 90 (at the equator)', () => {
+    expect(pointAlong([[0, 0], [0, 10]], 0.5)).toEqual({ point: [0, 5], bearing: 0 });
+    const east = pointAlong([[0, 0], [10, 0]], 0.5);
+    expect(east.point).toEqual([5, 0]);
+    expect(east.bearing).toBeCloseTo(90);
+  });
+  it('interpolates across segments by cumulative length', () => {
+    const { point } = pointAlong([[0, 0], [10, 0], [20, 0]], 0.75);
+    expect(point).toEqual([15, 0]);
+  });
+  it('clamps to the ends', () => {
+    expect(pointAlong([[0, 0], [10, 0]], -1).point).toEqual([0, 0]);
+    expect(pointAlong([[0, 0], [10, 0]], 2).point).toEqual([10, 0]);
+  });
+});
+
+describe('pathLength', () => {
+  it('sums segment lengths', () => {
+    expect(pathLength([[0, 0], [3, 4], [3, 4]])).toBeCloseTo(5);
   });
 });
 

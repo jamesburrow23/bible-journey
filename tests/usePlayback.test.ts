@@ -57,6 +57,17 @@ describe('usePlayback', () => {
     expect(p.stepIndex.value).toBe(0);
   });
 
+  it('externally paced play advances once and then waits for completion events', () => {
+    const p = usePlayback(() => 5, undefined, () => true);
+    p.togglePlay();
+    expect(p.playing.value).toBe(true);
+    expect(p.stepIndex.value).toBe(1); // kicked the first advance
+    vi.advanceTimersByTime(60000);
+    expect(p.stepIndex.value).toBe(1); // no timer driving it
+    p.togglePlay();
+    expect(p.playing.value).toBe(false);
+  });
+
   it('reset returns to 0 and stops playing', () => {
     const p = usePlayback(() => 5);
     p.next(); p.togglePlay(); p.reset();

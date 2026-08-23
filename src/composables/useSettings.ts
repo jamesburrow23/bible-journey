@@ -13,6 +13,7 @@ const DEFAULTS: Settings = {
   playMs: 1600,
   showMapCard: true,
   activeOverlay: null,
+  flightMode: false,
 };
 
 function load(): Settings {

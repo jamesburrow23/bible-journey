@@ -55,6 +55,13 @@ const count = computed(() => props.journey?.stops.length ?? 0);
       title="Toggle the parchment info card on the map"
       @click="settings.showMapCard = !settings.showMapCard"
     >Card</button>
+    <button
+      class="btn whitespace-nowrap"
+      :style="settings.flightMode ? 'border-color: var(--gold)' : ''"
+      :aria-pressed="settings.flightMode"
+      title="Cinematic terrain flyover on each step"
+      @click="settings.flightMode = !settings.flightMode"
+    >✈ Flight</button>
     <span class="hidden text-xs sm:inline" style="color: var(--faint)">
       <kbd class="rounded border px-1" style="border-color: var(--line)">←</kbd>
       <kbd class="rounded border px-1" style="border-color: var(--line)">→</kbd>

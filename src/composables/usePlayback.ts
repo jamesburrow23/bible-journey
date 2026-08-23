@@ -2,7 +2,12 @@ import { ref, getCurrentInstance, onUnmounted } from 'vue';
 
 export const PLAY_INTERVAL_MS = 1600;
 
-export function usePlayback(stopCount: () => number, intervalMs?: () => number) {
+export function usePlayback(
+  stopCount: () => number,
+  intervalMs?: () => number,
+  /** When true, play advances on external completion events, not a timer. */
+  externallyPaced?: () => boolean,
+) {
   const stepIndex = ref(0);
   const playing = ref(false);
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -31,6 +36,12 @@ export function usePlayback(stopCount: () => number, intervalMs?: () => number) 
     if (playing.value) { stopTimer(); return; }
     if (stepIndex.value >= stopCount() - 1) stepIndex.value = 0;
     playing.value = true;
+    if (externallyPaced?.()) {
+      // Kick the first advance; the owner drives the rest from completion
+      // events and calls togglePlay() again to stop at the end.
+      next();
+      return;
+    }
     timer = setInterval(() => {
       if (stepIndex.value >= stopCount() - 1) { stopTimer(); return; }
       next();

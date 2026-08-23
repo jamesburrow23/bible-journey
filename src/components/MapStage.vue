@@ -3,11 +3,12 @@ import { onMounted, onBeforeUnmount, ref, computed, watch } from 'vue';
 import maplibregl from 'maplibre-gl';
 import type { Journey, Stop } from '../types';
 import { loadParchmentStyle } from '../services/mapStyle';
-import { legPathsFromStops, slicePath, legLineString } from '../services/route';
+import { legPathsFromStops, slicePath, legLineString, pathLength, pointAlong, type LngLat } from '../services/route';
 import { useSettings } from '../composables/useSettings';
 import { OVERLAYS } from '../overlays';
 
 const props = defineProps<{ journey: Journey | null; stepIndex: number }>();
+const emit = defineEmits<{ 'leg-complete': [] }>();
 const { settings } = useSettings();
 
 const container = ref<HTMLDivElement>();
@@ -158,6 +159,11 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   if (animating) updateCard(-1);
   else updateCard(clamped);
 
+  if (animating && settings.value.flightMode) {
+    runFlight(paths[clamped - 1], paths, clamped);
+    return; // the flight owns line drawing, camera, card, and completion
+  }
+
   if (animating) {
     const path = paths[clamped - 1];
     const start = performance.now();
@@ -171,6 +177,7 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
         setSource('legs-static', paths.slice(0, clamped).map(legLineString));
         setSource('leg-active', []);
         updateCard(clamped);
+        emit('leg-complete');
       }
     };
     animFrame = requestAnimationFrame(tick);
@@ -181,7 +188,11 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   // Camera
   if (moveCamera) {
     const duration = Math.max(0, settings.value.cameraMs);
-    if (clamped === 0) {
+    if (settings.value.flightMode) {
+      // Non-flight transitions (back-step, jump) keep the chase pose.
+      const s = stops[clamped];
+      map.easeTo({ center: [s.lng, s.lat], zoom: 10.8, pitch: 62, duration });
+    } else if (clamped === 0) {
       map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration });
     } else {
       const path = paths[clamped - 1];
@@ -190,6 +201,39 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
       map.fitBounds(b, { padding: 120, duration, maxZoom: 9 });
     }
   }
+}
+
+/**
+ * Cinematic flyover: settle in behind the traveler, then chase the route
+ * spline at altitude — bearing smoothed to the path, dashed line drawing
+ * underfoot, the next stop rising on the horizon. Card lands on arrival.
+ */
+function runFlight(path: LngLat[], paths: LngLat[][], clamped: number): void {
+  const lenDeg = pathLength(path);
+  const durationMs = Math.min(14000, Math.max(3500, 2500 + lenDeg * 111 * 30));
+  const zoom = lenDeg <= 0.25 ? 12.2 : lenDeg <= 0.8 ? 11.2 : lenDeg <= 2 ? 10.2 : 9.2;
+  const PREROLL = 1400;
+  const start = pointAlong(path, 0.001);
+  let smooth = start.bearing;
+  map!.easeTo({ center: path[0], zoom, pitch: 62, bearing: smooth, duration: PREROLL });
+  const begin = performance.now() + PREROLL;
+  const tick = (now: number) => {
+    if (now < begin) { animFrame = requestAnimationFrame(tick); return; }
+    const t = Math.min(1, (now - begin) / durationMs);
+    const eased = t * t * (3 - 2 * t); // smoothstep: gentle take-off and landing
+    const { point, bearing } = pointAlong(path, eased);
+    smooth += (((bearing - smooth + 540) % 360) - 180) * 0.08;
+    setSource('leg-active', [legLineString(slicePath(path, eased))]);
+    map!.jumpTo({ center: point, zoom, pitch: 62, bearing: smooth });
+    if (t < 1) animFrame = requestAnimationFrame(tick);
+    else {
+      setSource('legs-static', paths.slice(0, clamped).map(legLineString));
+      setSource('leg-active', []);
+      updateCard(clamped);
+      emit('leg-complete');
+    }
+  };
+  animFrame = requestAnimationFrame(tick);
 }
 
 function fitJourney(): void {
@@ -223,7 +267,8 @@ onMounted(async () => {
     style,
     center: [35.2, 31.6],
     zoom: 5.5,
-    attributionControl: { compact: true, customAttribution: 'Region data © <a href="https://www.openbible.info/geo/">OpenBible.info</a> (CC-BY 4.0)' },
+    maxPitch: 75,
+    attributionControl: { compact: true, customAttribution: 'Region data © <a href="https://www.openbible.info/geo/">OpenBible.info</a> (CC-BY 4.0) · Terrain © <a href="https://registry.opendata.aws/terrain-tiles/">Mapzen/AWS</a>' },
   });
   map.on('load', () => {
     // Overlay layers slot in BENEATH the basemap's water so seas and lakes
@@ -277,10 +322,29 @@ onMounted(async () => {
         'circle-radius': DOT_RADIUS,
       },
     });
+    // Elevation tiles for flight mode (free AWS terrarium DEM, no key).
+    map!.addSource('dem', {
+      type: 'raster-dem',
+      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+      encoding: 'terrarium',
+      tileSize: 256,
+      maxzoom: 13,
+    });
+    // Parchment-tinted atmosphere so the flight horizon fades like an aged map.
+    map!.setSky({
+      'sky-color': '#d7d2bd',
+      'horizon-color': '#e8dbb7',
+      'fog-color': '#e3d8b8',
+      'sky-horizon-blend': 0.6,
+      'horizon-fog-blend': 0.7,
+      'fog-ground-blend': 0.5,
+      'atmosphere-blend': 0.8,
+    });
     map!.on('zoom', syncLabelScale);
     syncLabelScale();
     ready = true;
     applyOverlay();
+    setFlight(settings.value.flightMode, false);
     if (props.journey) { fitJourney(); renderStep(props.stepIndex, false, false); }
   });
 });
@@ -315,6 +379,22 @@ watch(() => settings.value.showMapCard, () => {
 });
 
 watch(() => settings.value.activeOverlay, applyOverlay);
+
+function setFlight(on: boolean, animateCamera: boolean): void {
+  if (!map || !ready) return;
+  if (on) {
+    map.setTerrain({ source: 'dem', exaggeration: 1.4 });
+    const s = props.journey?.stops[currentStep()];
+    if (animateCamera && s) {
+      map.easeTo({ center: [s.lng, s.lat], zoom: 10.8, pitch: 62, duration: 1400 });
+    }
+  } else {
+    map.setTerrain(null);
+    if (animateCamera) map.easeTo({ pitch: 0, bearing: 0, zoom: Math.min(map.getZoom(), 8), duration: 900 });
+  }
+}
+
+watch(() => settings.value.flightMode, (on) => setFlight(on, true));
 </script>
 
 <template>

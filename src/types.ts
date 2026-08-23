@@ -52,4 +52,6 @@ export interface Settings {
   showMapCard: boolean;
   /** Active historical overlay preset id, or null for none. */
   activeOverlay: string | null;
+  /** Cinematic terrain-following chase camera on step transitions. */
+  flightMode: boolean;
 }

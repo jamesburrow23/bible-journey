@@ -10,7 +10,22 @@ import { useSettings } from './composables/useSettings';
 
 const { activeJourney } = useJourneys();
 const { settings } = useSettings();
-const playback = usePlayback(() => activeJourney.value?.stops.length ?? 0, () => settings.value.playMs);
+const playback = usePlayback(
+  () => activeJourney.value?.stops.length ?? 0,
+  () => settings.value.playMs,
+  () => settings.value.flightMode, // flights pace playback via leg-complete
+);
+
+// In flight mode, auto-play advances when each flyover lands.
+function onLegComplete(): void {
+  if (!playback.playing.value || !settings.value.flightMode) return;
+  const count = activeJourney.value?.stops.length ?? 0;
+  if (playback.stepIndex.value >= count - 1) {
+    playback.togglePlay(); // journey finished — stop playing
+    return;
+  }
+  setTimeout(() => { if (playback.playing.value) playback.next(); }, 900);
+}
 
 const collapsed = ref(false);
 const settingsOpen = ref(false);
@@ -31,7 +46,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
     />
     <div class="flex min-w-0 flex-1 flex-col">
       <div class="min-h-0 flex-1">
-        <MapStage :journey="activeJourney" :step-index="playback.stepIndex.value" />
+        <MapStage :journey="activeJourney" :step-index="playback.stepIndex.value" @leg-complete="onLegComplete" />
       </div>
       <PresentationBar
         :journey="activeJourney"

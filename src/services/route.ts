@@ -97,6 +97,47 @@ export function slicePath(path: LngLat[], t: number): LngLat[] {
   return out;
 }
 
+/** Total polyline length in degrees (planar approximation). */
+export function pathLength(path: LngLat[]): number {
+  let total = 0;
+  for (let i = 1; i < path.length; i++) {
+    total += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
+  }
+  return total;
+}
+
+/**
+ * Point at fraction `t` of a polyline's length, plus the travel bearing
+ * (degrees clockwise from north) of the segment it falls on.
+ */
+export function pointAlong(path: LngLat[], t: number): { point: LngLat; bearing: number } {
+  const c = Math.min(1, Math.max(0, t));
+  const bearingOf = (a: LngLat, b: LngLat): number => {
+    const dx = (b[0] - a[0]) * Math.cos(((a[1] + b[1]) / 2) * Math.PI / 180);
+    const dy = b[1] - a[1];
+    return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+  };
+  if (path.length < 2) return { point: path[0] ?? [0, 0], bearing: 0 };
+  const total = pathLength(path);
+  if (total === 0) return { point: path[0], bearing: 0 };
+  let target = total * c;
+  for (let i = 1; i < path.length; i++) {
+    const seg = Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
+    if (target <= seg || i === path.length - 1) {
+      const f = seg === 0 ? 0 : Math.min(1, target / seg);
+      return {
+        point: [
+          path[i - 1][0] + (path[i][0] - path[i - 1][0]) * f,
+          path[i - 1][1] + (path[i][1] - path[i - 1][1]) * f,
+        ],
+        bearing: bearingOf(path[i - 1], path[i]),
+      };
+    }
+    target -= seg;
+  }
+  return { point: path[path.length - 1], bearing: bearingOf(path[path.length - 2], path[path.length - 1]) };
+}
+
 export function legLineString(coords: LngLat[]): GeoJSON.Feature {
   return {
     type: 'Feature',
