@@ -94,6 +94,18 @@ function updateCard(step: number): void {
   event.className = 'bj-card-event';
   event.textContent = s.event;
   cardEl.append(name, ref_, event);
+  if (s.photo?.url) {
+    const img = document.createElement('img');
+    img.className = 'bj-card-photo';
+    const credit = document.createElement('div');
+    credit.className = 'bj-card-credit';
+    credit.textContent = `Photo: ${s.photo.credit}`;
+    img.alt = `The site of ${s.name} today`;
+    img.loading = 'lazy';
+    img.onerror = () => { img.remove(); credit.remove(); };
+    img.src = s.photo.url;
+    cardEl.append(img, credit);
+  }
   if (!cardMarker) {
     cardMarker = new maplibregl.Marker({ element: cardEl, anchor: 'left', offset: [26, -10] })
       .setLngLat([s.lng, s.lat])
@@ -383,5 +395,21 @@ watch(() => settings.value.activeOverlay, applyOverlay);
   font-size: 13.5px;
   line-height: 1.4;
   color: #5a492d;
+}
+.bj-card-photo {
+  display: block;
+  width: 100%;
+  height: 108px;
+  object-fit: cover;
+  margin-top: 9px;
+  border: 1px solid #b09a68;
+  filter: sepia(0.35) contrast(0.92) saturate(0.85);
+}
+.bj-card-credit {
+  font-family: 'Alegreya Sans', sans-serif;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  color: #8c7a52;
+  margin-top: 3px;
 }
 </style>

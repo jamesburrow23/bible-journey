@@ -21,6 +21,12 @@ export interface RawStop {
 export interface Stop extends RawStop {
   id: string;
   coordSource: CoordSource;
+  /** Identification confidence (0-1000) when matched in the gazetteer. */
+  confidence?: number;
+  /** Photo of the identified site (Wikimedia, credited). */
+  photo?: { url: string; credit: string; creditUrl?: string };
+  /** Whether verseRef appears among the place's known verse mentions. */
+  verseOk?: boolean;
 }
 
 export interface Journey {

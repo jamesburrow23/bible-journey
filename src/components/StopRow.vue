@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import type { Stop } from '../types';
 import { lookupPlace } from '../services/gazetteer';
+import { refMatchesPlace } from '../services/verses';
 
 const props = defineProps<{ stop: Stop; index: number; isLast: boolean }>();
 const emit = defineEmits<{ update: []; move: [delta: -1 | 1]; remove: [] }>();
@@ -23,6 +24,10 @@ function relookup(): void {
     props.stop.lat = hit.lat;
     props.stop.lng = hit.lng;
     props.stop.coordSource = 'gazetteer';
+    props.stop.confidence = hit.confidence;
+    props.stop.photo = hit.photo;
+    const ok = refMatchesPlace(hit.verses, props.stop.verseRef);
+    props.stop.verseOk = ok === null ? undefined : ok;
     emit('update');
   }
 }
@@ -44,7 +49,14 @@ const badge = { gazetteer: '✓ gazetteer', model: '? model guess', manual: '✎
             : stop.coordSource === 'model'
               ? 'background:#463517;color:#d8b26a'
               : 'background:#3a3325;color:#9c8e72'"
+          :title="stop.confidence != null ? `Identification confidence: ${stop.confidence}/1000` : undefined"
         >{{ badge[stop.coordSource] }}</span>
+        <span
+          v-if="stop.verseOk === false"
+          class="rounded-full px-2 text-[11px]"
+          style="background: #4a2a1a; color: #e0906f"
+          title="This verse isn't among the verses known to mention this place — double-check the reference or the place."
+        >⚠ verse?</span>
         <span class="ml-auto flex gap-2">
           <button title="Edit" style="color: var(--faint)" @click="editing = true">✎</button>
           <button v-if="index > 0" title="Move up" style="color: var(--faint)" @click="emit('move', -1)">↑</button>
