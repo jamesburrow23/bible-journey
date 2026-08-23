@@ -16,6 +16,8 @@ export interface RawStop {
   via?: Waypoint[];
   /** How the traveler reached this stop from the previous one. */
   legMode?: 'land' | 'sea';
+  /** Kind of place, for the 3D miniature shown on arrival. */
+  siteType?: 'city' | 'village' | 'palace' | 'temple' | 'mountain' | 'wilderness' | 'water' | 'camp';
 }
 
 export interface Stop extends RawStop {

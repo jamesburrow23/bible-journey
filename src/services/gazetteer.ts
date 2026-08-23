@@ -75,6 +75,13 @@ export function applyGazetteer(raw: RawStop[]): Stop[] {
     // guess is better; use the fallback only when the model gave nothing.
     const modelCoordsUsable = Number.isFinite(r.lat) && Number.isFinite(r.lng) && !(r.lat === 0 && r.lng === 0);
     const useHitCoords = !!hit && (hit.confidence > 0 || !modelCoordsUsable);
+    // Fallback miniature type from the dataset when the model didn't say.
+    const siteType = r.siteType ?? (hit
+      ? /^mount(ain)?\b/i.test(hit.name) ? 'mountain' as const
+        : hit.types.includes('water') ? 'water' as const
+        : hit.types.includes('settlement') ? 'village' as const
+        : 'wilderness' as const
+      : undefined);
     return {
       ...r,
       id: crypto.randomUUID(),
@@ -84,6 +91,7 @@ export function applyGazetteer(raw: RawStop[]): Stop[] {
       coordSource: useHitCoords ? 'gazetteer' : 'model',
       ...(useHitCoords ? { confidence: hit!.confidence } : {}),
       ...(hit?.photo ? { photo: hit.photo } : {}),
+      ...(siteType ? { siteType } : {}),
       ...(verseOk === null ? {} : { verseOk }),
     };
   });

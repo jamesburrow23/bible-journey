@@ -8,6 +8,7 @@ import { useSettings } from '../composables/useSettings';
 import { useJourneys } from '../composables/useJourneys';
 import { routeEditing } from '../composables/useUiState';
 import { OVERLAYS } from '../overlays';
+import { MiniModelLayer } from '../services/modelLayer';
 
 const props = defineProps<{ journey: Journey | null; stepIndex: number }>();
 const emit = defineEmits<{ 'leg-complete': [] }>();
@@ -37,6 +38,7 @@ let cardMarker: maplibregl.Marker | null = null;
 const cardEl = document.createElement('div');
 cardEl.className = 'bj-card';
 let regionMarkers: maplibregl.Marker[] = [];
+const miniLayer = new MiniModelLayer();
 let ready = false;
 let animFrame = 0;
 let suppressNextStepCamera = false;
@@ -95,7 +97,20 @@ function showStops(step: number): void {
   });
 }
 
+/** Show the current stop's miniature (flight/hike only), or hide it. */
+function updateMini(step: number): void {
+  if (!map || !ready) return;
+  const s: Stop | undefined = props.journey?.stops[step];
+  if (!s || settings.value.viewMode === 'map' || routeEditing.value) {
+    miniLayer.hide();
+    return;
+  }
+  const alt = map.queryTerrainElevation({ lng: s.lng, lat: s.lat }) ?? 0;
+  miniLayer.show({ lng: s.lng, lat: s.lat }, alt, s.siteType ?? 'village');
+}
+
 function updateCard(step: number): void {
+  updateMini(step); // the miniature travels with the card's lifecycle
   const s: Stop | undefined = props.journey?.stops[step];
   if (!ready || !s || !settings.value.showMapCard) {
     cardMarker?.remove();
@@ -520,6 +535,7 @@ onMounted(async () => {
       'fog-ground-blend': 0.5,
       'atmosphere-blend': 0.8,
     });
+    map!.addLayer(miniLayer as unknown as maplibregl.CustomLayerInterface);
     map!.on('zoom', syncLabelScale);
     syncLabelScale();
     ready = true;
@@ -577,7 +593,10 @@ function applyViewMode(animateCamera: boolean): void {
   }
 }
 
-watch(() => settings.value.viewMode, () => applyViewMode(true));
+watch(() => settings.value.viewMode, () => {
+  applyViewMode(true);
+  updateMini(currentStep()); // appears/disappears with the mode
+});
 </script>
 
 <template>

@@ -1,6 +1,6 @@
 import type { RawStop } from '../types';
 
-export const DEFAULT_PROMPT = `You are a biblical geography assistant with access to Google Search. From the passage below, extract every place a character travels to or through, in narrative order. For each stop return: name (the biblical place name), modernHint (the identified modern location or archaeological site), lat and lng (decimal-degree coordinates of the ancient site), event (a one-sentence summary of what happens there, suitable for children), verseRef (book chapter:verse), legMode ("land" or "sea" — how the traveler reached this stop from the previous stop), and via (2-5 intermediate {lat, lng} waypoints tracing the historically plausible route from the previous stop: follow ancient roads such as the Via Maris, the King's Highway, or the Fertile Crescent arc for land travel, and coastal shipping lanes for sea travel; never route a land journey across open water; the first stop's via is an empty array). Coordinate accuracy is critical — an incorrect location is a total failure. If you are not fully certain of a place's location, use Google Search to find the identified ancient site (tell, ruin, or modern successor town) and use its coordinates. Only include places on the journey itself, not places merely mentioned. Return JSON only.`;
+export const DEFAULT_PROMPT = `You are a biblical geography assistant with access to Google Search. From the passage below, extract every place a character travels to or through, in narrative order. For each stop return: name (the biblical place name), modernHint (the identified modern location or archaeological site), lat and lng (decimal-degree coordinates of the ancient site), event (a one-sentence summary of what happens there, suitable for children), verseRef (book chapter:verse), siteType (what kind of place this stop is in the story: city, village, palace, temple, mountain, wilderness, water, or camp), legMode ("land" or "sea" — how the traveler reached this stop from the previous stop), and via (2-5 intermediate {lat, lng} waypoints tracing the historically plausible route from the previous stop: follow ancient roads such as the Via Maris, the King's Highway, or the Fertile Crescent arc for land travel, and coastal shipping lanes for sea travel; never route a land journey across open water; the first stop's via is an empty array). Coordinate accuracy is critical — an incorrect location is a total failure. If you are not fully certain of a place's location, use Google Search to find the identified ancient site (tell, ruin, or modern successor town) and use its coordinates. Only include places on the journey itself, not places merely mentioned. Return JSON only.`;
 
 const RESPONSE_SCHEMA = {
   type: 'ARRAY',
@@ -14,6 +14,7 @@ const RESPONSE_SCHEMA = {
       event: { type: 'STRING' },
       verseRef: { type: 'STRING' },
       legMode: { type: 'STRING', enum: ['land', 'sea'] },
+      siteType: { type: 'STRING', enum: ['city', 'village', 'palace', 'temple', 'mountain', 'wilderness', 'water', 'camp'] },
       via: {
         type: 'ARRAY',
         items: {
@@ -69,6 +70,9 @@ export function parseGeminiResponse(body: unknown): RawStop[] {
       event: s.event,
       verseRef: s.verseRef,
       legMode: s.legMode === 'sea' ? 'sea' as const : 'land' as const,
+      ...(['city', 'village', 'palace', 'temple', 'mountain', 'wilderness', 'water', 'camp'].includes(s.siteType)
+        ? { siteType: s.siteType }
+        : {}),
       via: Array.isArray(s.via)
         ? s.via
             .filter((w: any) => typeof w?.lat === 'number' && typeof w?.lng === 'number')
