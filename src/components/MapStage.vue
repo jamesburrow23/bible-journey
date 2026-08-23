@@ -54,7 +54,9 @@ const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: 
 
 // Dots and lines are native map layers so they share the map's projection
 // and zoom scaling exactly — they cannot drift apart the way DOM markers can.
-const LINE_WIDTH: any = ['interpolate', ['linear'], ['zoom'], 4, 2.2, 7, 3.5, 10, 5.5];
+// Widths keep climbing at close zooms — at hike-mode grazing angles a thin
+// draped line foreshortens to invisibility.
+const LINE_WIDTH: any = ['interpolate', ['linear'], ['zoom'], 4, 2.2, 7, 3.5, 10, 5.5, 12, 10, 14, 18];
 const DOT_RADIUS: any = ['interpolate', ['linear'], ['zoom'], 4, 4, 7, 5.5, 10, 8];
 const HALO_RADIUS: any = ['interpolate', ['linear'], ['zoom'], 4, 9, 7, 12, 10, 17];
 
@@ -410,7 +412,7 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
     const rad = (bearingDeg * Math.PI) / 180;
     // Far enough behind that the painted line's tip sits visibly ahead
     // in the lower-middle of the frame while it draws.
-    const backDeg = 900 / 111000;
+    const backDeg = 1400 / 111000;
     const back: LngLat = [
       cur[0] - (Math.sin(rad) * backDeg) / Math.cos((cur[1] * Math.PI) / 180),
       cur[1] - Math.cos(rad) * backDeg,
@@ -426,9 +428,9 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
     const aheadElev = map!.queryTerrainElevation({ lng: ahead[0], lat: ahead[1] }) ?? 0;
     const camOpts = map!.calculateCameraOptionsFromTo(
       new maplibregl.LngLat(back[0], back[1]),
-      altSmooth + 120,
+      altSmooth + 140,
       new maplibregl.LngLat(ahead[0], ahead[1]),
-      aheadElev + 150,
+      aheadElev + 110,
     );
     map!.jumpTo(camOpts);
   };
