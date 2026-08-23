@@ -42,7 +42,7 @@ function addStop(): void {
       </span>
     </div>
     <p v-if="routeEditing" class="mb-2 text-xs" style="color: var(--faint)">
-      Drag a square handle to bend the route. Drag a dashed circle to add a bend. Double-click a square to remove it.
+      Drag a gold-ringed dot to move a stop. Drag a square to bend the route, a dashed circle to add a bend; each new bend adds more circles, so the path can be shaped as finely as you like. Double-click a square to remove it.
     </p>
 
     <StopRow

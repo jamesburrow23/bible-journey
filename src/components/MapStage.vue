@@ -195,14 +195,15 @@ function viaOf(i: number): { lat: number; lng: number }[] {
   return props.journey?.stops[i].via ?? [];
 }
 
-/** Show the whole route (optionally with one leg's via previewed mid-drag). */
-function renderEditLines(previewLeg?: number, previewVia?: { lat: number; lng: number }[]): void {
+/** Show the whole route, optionally from a temporary stops array mid-drag. */
+function renderEditLines(tempStops?: Stop[]): void {
   if (!map || !ready || !props.journey) return;
-  const stops = props.journey.stops.map((s, i) =>
-    previewLeg === i ? { ...s, via: previewVia } : s,
-  );
-  setSource('legs-static', legPathsFromStops(stops).map(legLineString));
+  setSource('legs-static', legPathsFromStops(tempStops ?? props.journey.stops).map(legLineString));
   setSource('leg-active', []);
+}
+
+function withVia(leg: number, via: { lat: number; lng: number }[]): Stop[] {
+  return props.journey!.stops.map((s, i) => (i === leg ? { ...s, via } : s));
 }
 
 function commitVia(leg: number, via: { lat: number; lng: number }[]): void {
@@ -216,13 +217,31 @@ function rebuildHandles(): void {
   handleMarkers = [];
   if (!routeEditing.value || !map || !ready || !props.journey) return;
   const stops = props.journey.stops;
+  const paths = legPathsFromStops(stops);
+
+  // Draggable handle on every STOP: reposition the destination itself.
+  stops.forEach((stop, i) => {
+    const el = document.createElement('div');
+    el.className = 'bj-handle bj-handle-stop';
+    el.title = `Drag to move ${stop.name || 'this stop'}`;
+    const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([stop.lng, stop.lat]).addTo(map!);
+    m.on('drag', () => {
+      const p = m.getLngLat();
+      renderEditLines(stops.map((s, si) => (si === i ? { ...s, lat: p.lat, lng: p.lng } : s)));
+    });
+    m.on('dragend', () => {
+      const p = m.getLngLat();
+      stop.lat = p.lat;
+      stop.lng = p.lng;
+      stop.coordSource = 'manual';
+      touchActive();
+    });
+    handleMarkers.push(m);
+  });
+
   for (let i = 1; i < stops.length; i++) {
     const via = viaOf(i);
-    const anchors: LngLat[] = [
-      [stops[i - 1].lng, stops[i - 1].lat],
-      ...via.map((w): LngLat => [w.lng, w.lat]),
-      [stops[i].lng, stops[i].lat],
-    ];
+    const segCount = via.length + 1; // anchors: prev stop, ...via, stop
     // Draggable handle per existing waypoint; double-click removes it.
     via.forEach((w, vi) => {
       const el = document.createElement('div');
@@ -231,8 +250,7 @@ function rebuildHandles(): void {
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([w.lng, w.lat]).addTo(map!);
       m.on('drag', () => {
         const p = m.getLngLat();
-        const next = via.map((x, xi) => (xi === vi ? { lat: p.lat, lng: p.lng } : x));
-        renderEditLines(i, next);
+        renderEditLines(withVia(i, via.map((x, xi) => (xi === vi ? { lat: p.lat, lng: p.lng } : x))));
       });
       m.on('dragend', () => {
         const p = m.getLngLat();
@@ -244,9 +262,11 @@ function rebuildHandles(): void {
       });
       handleMarkers.push(m);
     });
-    // Ghost handle at each segment midpoint: drag it to add a new bend there.
-    for (let s = 0; s < anchors.length - 1; s++) {
-      const mid: LngLat = [(anchors[s][0] + anchors[s + 1][0]) / 2, (anchors[s][1] + anchors[s + 1][1]) / 2];
+    // Ghost handle on the drawn curve at each segment's middle: drag to add
+    // a bend there. Every committed bend creates new segments — and new
+    // ghosts — so the path subdivides as finely as needed.
+    for (let s = 0; s < segCount; s++) {
+      const mid = pointAlong(paths[i - 1], (s + 0.5) / segCount).point;
       const el = document.createElement('div');
       el.className = 'bj-handle bj-handle-ghost';
       el.title = 'Drag to add a bend here';
@@ -254,8 +274,7 @@ function rebuildHandles(): void {
       const insertAt = s; // segment s sits before via[s]
       m.on('drag', () => {
         const p = m.getLngLat();
-        const next = [...via.slice(0, insertAt), { lat: p.lat, lng: p.lng }, ...via.slice(insertAt)];
-        renderEditLines(i, next);
+        renderEditLines(withVia(i, [...via.slice(0, insertAt), { lat: p.lat, lng: p.lng }, ...via.slice(insertAt)]));
       });
       m.on('dragend', () => {
         const p = m.getLngLat();
@@ -758,6 +777,11 @@ watch(() => settings.value.showMinis, () => updateMini(currentStep()));
   background: rgba(241, 230, 200, 0.55);
   border: 1.5px dashed var(--route);
   box-shadow: none;
+}
+.bj-handle-stop {
+  width: 17px; height: 17px; border-radius: 50%;
+  background: var(--route); border: 3px solid #f1e6c8;
+  box-shadow: 0 0 0 1.5px var(--gold), 0 1px 5px rgba(40, 30, 10, 0.45);
 }
 .bj-card {
   max-width: 310px;
