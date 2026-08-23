@@ -17,6 +17,17 @@ function remove(i: number): void {
   touchActive();
 }
 
+function duplicate(i: number): void {
+  const stops = activeJourney.value!.stops;
+  const src = stops[i];
+  stops.splice(i + 1, 0, {
+    ...src,
+    id: crypto.randomUUID(),
+    via: src.via?.map((w) => ({ ...w })), // deep-copy waypoints so edits don't couple
+  });
+  touchActive();
+}
+
 function addStop(): void {
   activeJourney.value!.stops.push({
     id: crypto.randomUUID(), name: '', modernHint: '', lat: 31.5, lng: 35.0,
@@ -54,6 +65,7 @@ function addStop(): void {
       @update="touchActive"
       @move="(d) => move(i, d)"
       @remove="remove(i)"
+      @duplicate="duplicate(i)"
     />
 
     <button v-if="!isActiveSaved" class="btn btn-primary mt-3" @click="saveActive">Save to library</button>

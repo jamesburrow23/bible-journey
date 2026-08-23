@@ -5,7 +5,7 @@ import { lookupPlace } from '../services/gazetteer';
 import { refMatchesPlace } from '../services/verses';
 
 const props = defineProps<{ stop: Stop; index: number; isLast: boolean }>();
-const emit = defineEmits<{ update: []; move: [delta: -1 | 1]; remove: [] }>();
+const emit = defineEmits<{ update: []; move: [delta: -1 | 1]; remove: []; duplicate: [] }>();
 
 const editing = ref(!props.stop.name); // new blank stops open in edit mode
 
@@ -74,6 +74,7 @@ function setColor(c: string): void {
         >⚠ verse?</span>
         <span class="ml-auto flex gap-2">
           <button title="Edit" style="color: var(--faint)" @click="editing = true">✎</button>
+          <button title="Duplicate this stop" style="color: var(--faint)" @click="emit('duplicate')">⧉</button>
           <button v-if="index > 0" title="Move up" style="color: var(--faint)" @click="emit('move', -1)">↑</button>
           <button v-if="!isLast" title="Move down" style="color: var(--faint)" @click="emit('move', 1)">↓</button>
           <button title="Delete" style="color: var(--faint)" @click="emit('remove')">✕</button>
