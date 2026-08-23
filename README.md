@@ -76,7 +76,7 @@ Deploys to GitHub Pages automatically on push to `main`
 
 Vue 3 + TypeScript + Vite + Tailwind, MapLibre GL JS (vector basemap restyled
 to parchment at runtime, raster-DEM terrain + hillshade), Google Gemini
-(`gemini-3.1-flash` by default, model configurable) with Google-Search
+(`gemini-3.7-flash` by default, model configurable) with Google-Search
 grounding and structured output. No backend; the API key and all data stay in
 the browser.
 

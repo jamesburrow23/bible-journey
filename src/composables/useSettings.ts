@@ -6,7 +6,7 @@ const KEY = 'bj.settings';
 
 const DEFAULTS: Settings = {
   geminiApiKey: '',
-  geminiModel: 'gemini-3.1-flash',
+  geminiModel: 'gemini-3.7-flash',
   customPrompt: null,
   drawMs: 1100,
   cameraMs: 800,
@@ -23,6 +23,8 @@ function load(): Settings {
       // Migrate the pre-hike-mode boolean toggle.
       if (parsed.flightMode && !parsed.viewMode) parsed.viewMode = 'flight';
       delete parsed.flightMode;
+      // 'gemini-3.1-flash' was a bad default (no such model) — replace it.
+      if (parsed.geminiModel === 'gemini-3.1-flash') parsed.geminiModel = DEFAULTS.geminiModel;
       return { ...DEFAULTS, ...parsed };
     }
   } catch { /* corrupted storage falls back to defaults */ }

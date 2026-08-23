@@ -31,8 +31,8 @@ const RESPONSE_SCHEMA = {
 
 export class GeminiError extends Error {
   userMessage: string;
-  kind: 'auth' | 'quota' | 'content' | 'http';
-  constructor(userMessage: string, detail?: string, kind: 'auth' | 'quota' | 'content' | 'http' = 'content') {
+  kind: 'auth' | 'quota' | 'content' | 'http' | 'config';
+  constructor(userMessage: string, detail?: string, kind: 'auth' | 'quota' | 'content' | 'http' | 'config' = 'content') {
     super(detail ?? userMessage);
     this.name = 'GeminiError';
     this.userMessage = userMessage;
@@ -85,12 +85,12 @@ export function parseGeminiResponse(body: unknown): RawStop[] {
 }
 
 async function callOnce(passage: string, prompt: string, apiKey: string, model: string): Promise<RawStop[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model.trim()}:generateContent`;
   let res: Response;
   try {
     res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
       body: JSON.stringify({
         contents: [{ parts: [{ text: `${prompt}\n\nPASSAGE:\n${passage}` }] }],
         tools: [{ google_search: {} }],
@@ -101,13 +101,17 @@ async function callOnce(passage: string, prompt: string, apiKey: string, model: 
     throw new GeminiError('Network error — check your internet connection and try again.', String(err), 'http');
   }
   if (!res.ok) {
+    const detail = typeof res.text === 'function' ? await res.text().catch(() => '') : '';
     if (res.status === 400 || res.status === 401 || res.status === 403) {
-      throw new GeminiError('Request rejected — check your Gemini API key in Settings.', undefined, 'auth');
+      throw new GeminiError('Request rejected — check your Gemini API key in Settings.', detail, 'auth');
+    }
+    if (res.status === 404) {
+      throw new GeminiError(`Model "${model.trim()}" not found — check the model name in Settings (e.g. gemini-3.7-flash).`, detail, 'config');
     }
     if (res.status === 429) {
-      throw new GeminiError('Gemini quota exceeded — wait a minute and try again.', undefined, 'quota');
+      throw new GeminiError('Gemini quota exceeded — wait a minute and try again.', detail, 'quota');
     }
-    throw new GeminiError(`Gemini request failed (HTTP ${res.status}). Try again.`, undefined, 'http');
+    throw new GeminiError(`Gemini request failed (HTTP ${res.status}). Try again.`, detail, 'http');
   }
   return parseGeminiResponse(await res.json());
 }
@@ -117,7 +121,7 @@ export async function extractStops(passage: string, prompt: string, apiKey: stri
     return await callOnce(passage, prompt, apiKey, model);
   } catch (e) {
     // Retry once only for content and http errors, not auth/quota failures.
-    if (e instanceof GeminiError && e.kind !== 'auth' && e.kind !== 'quota') {
+    if (e instanceof GeminiError && e.kind !== 'auth' && e.kind !== 'quota' && e.kind !== 'config') {
       return await callOnce(passage, prompt, apiKey, model);
     }
     throw e;

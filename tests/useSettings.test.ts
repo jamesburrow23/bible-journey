@@ -11,7 +11,7 @@ beforeEach(() => {
 describe('useSettings', () => {
   it('starts with defaults', () => {
     const { settings, effectivePrompt } = useSettings();
-    expect(settings.value.geminiModel).toBe('gemini-3.1-flash');
+    expect(settings.value.geminiModel).toBe('gemini-3.7-flash');
     expect(settings.value.geminiApiKey).toBe('');
     expect(effectivePrompt.value).toBe(DEFAULT_PROMPT);
   });

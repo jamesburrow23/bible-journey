@@ -100,6 +100,15 @@ describe('extractStops', () => {
     });
   });
 
+  it('maps 404 to a model-name message with Google\'s error attached, and does not retry', async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 404, text: async () => '{"error":"model not found"}' } as Response);
+    await expect(extractStops('p', 'x', 'K', 'no-such-model')).rejects.toMatchObject({
+      userMessage: expect.stringContaining('no-such-model'),
+      message: expect.stringContaining('model not found'),
+    });
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
   it('does not retry on 403 (auth error)', async () => {
     vi.mocked(fetch).mockResolvedValue({ ok: false, status: 403, json: async () => ({}) } as Response);
     await expect(extractStops('p', 'x', 'BAD', 'm')).rejects.toThrow(GeminiError);
