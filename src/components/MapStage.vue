@@ -696,7 +696,7 @@ watch(() => settings.value.showMinis, () => updateMini(currentStep()));
   box-shadow: none;
 }
 .bj-card {
-  max-width: 240px;
+  max-width: 310px;
   background: linear-gradient(160deg, #f0e5c8, #e4d5af);
   border: 1px solid #b09a68;
   outline: 1px solid rgba(176, 154, 104, 0.55);
@@ -708,32 +708,34 @@ watch(() => settings.value.showMinis, () => updateMini(currentStep()));
 }
 .bj-card-name {
   font-family: 'IM Fell English SC', serif;
-  font-size: 17px;
-  line-height: 1.15;
+  font-size: 26px;
+  font-weight: 700;
+  -webkit-text-stroke: 0.6px #4a3b22; /* Fell SC ships one weight; thicken it */
+  line-height: 1.1;
   color: #4a3b22;
 }
 .bj-card-ref {
   font-family: 'Alegreya Sans', sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: #8c6d3f;
-  margin: 3px 0 5px;
+  margin: 4px 0 7px;
 }
 .bj-card-event {
   font-family: 'IM Fell English', serif;
   font-style: italic;
-  font-size: 13.5px;
-  line-height: 1.4;
+  font-size: 17px;
+  line-height: 1.42;
   color: #5a492d;
 }
 .bj-card-photo {
   display: block;
   width: 100%;
-  height: 108px;
+  height: 150px;
   object-fit: cover;
-  margin-top: 9px;
+  margin-top: 10px;
   border: 1px solid #b09a68;
   filter: sepia(0.35) contrast(0.92) saturate(0.85);
   pointer-events: auto; /* the card itself is click-through; the photo isn't */
@@ -748,9 +750,9 @@ watch(() => settings.value.showMinis, () => updateMini(currentStep()));
 }
 .bj-card-credit {
   font-family: 'Alegreya Sans', sans-serif;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.03em;
   color: #8c7a52;
-  margin-top: 3px;
+  margin-top: 4px;
 }
 </style>
