@@ -16,6 +16,21 @@ const { touchActive } = useJourneys();
 
 const container = ref<HTMLDivElement>();
 const mapError = ref('');
+const lightbox = ref<{ url: string; alt: string; credit: string; creditUrl?: string } | null>(null);
+
+function closeLightbox(): void {
+  lightbox.value = null;
+  window.removeEventListener('keydown', onLightboxKey);
+}
+function onLightboxKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape') closeLightbox();
+}
+function openLightbox(photo: { url: string; credit: string; creditUrl?: string }, alt: string): void {
+  // The 960px thumb is the largest size Wikimedia serves hotlinkers.
+  const url = photo.url.includes('px-') ? photo.url.replace(/\/\d+px-/, '/960px-') : photo.url;
+  lightbox.value = { url, alt, credit: photo.credit, creditUrl: photo.creditUrl };
+  window.addEventListener('keydown', onLightboxKey);
+}
 let map: maplibregl.Map | null = null;
 let labelMarkers: maplibregl.Marker[] = [];
 let cardMarker: maplibregl.Marker | null = null;
@@ -106,6 +121,8 @@ function updateCard(step: number): void {
     credit.textContent = `Photo: ${s.photo.credit}`;
     img.alt = `The site of ${s.name} today`;
     img.loading = 'lazy';
+    img.title = 'Click to enlarge';
+    img.onclick = () => openLightbox(s.photo!, img.alt);
     img.onerror = () => { img.remove(); credit.remove(); };
     // Journeys saved before the size-whitelist fix carry 480px thumb URLs
     // Wikimedia refuses; 500px is the nearest allowed size.
@@ -579,6 +596,27 @@ watch(() => settings.value.viewMode, () => applyViewMode(true));
     >
       {{ mapError }}
     </div>
+    <div
+      v-if="lightbox"
+      class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 p-8"
+      style="background: rgba(20, 15, 6, 0.88); cursor: zoom-out"
+      @click="closeLightbox"
+    >
+      <img :src="lightbox.url" :alt="lightbox.alt" class="bj-lightbox-img" />
+      <div class="text-center">
+        <div class="font-fell text-lg" style="color: var(--ink)">{{ lightbox.alt }}</div>
+        <a
+          v-if="lightbox.creditUrl"
+          :href="lightbox.creditUrl"
+          target="_blank"
+          rel="noopener"
+          class="text-xs underline"
+          style="color: var(--muted)"
+          @click.stop
+        >Photo: {{ lightbox.credit }}</a>
+        <div v-else class="text-xs" style="color: var(--muted)">Photo: {{ lightbox.credit }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -665,6 +703,15 @@ watch(() => settings.value.viewMode, () => applyViewMode(true));
   margin-top: 9px;
   border: 1px solid #b09a68;
   filter: sepia(0.35) contrast(0.92) saturate(0.85);
+  pointer-events: auto; /* the card itself is click-through; the photo isn't */
+  cursor: zoom-in;
+}
+.bj-lightbox-img {
+  max-width: min(90vw, 960px);
+  max-height: 78vh;
+  object-fit: contain;
+  border: 3px solid #b09a68;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
 .bj-card-credit {
   font-family: 'Alegreya Sans', sans-serif;
