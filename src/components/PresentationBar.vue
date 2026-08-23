@@ -7,6 +7,12 @@ const props = defineProps<{ journey: Journey | null; stepIndex: number; playing:
 const emit = defineEmits<{ next: []; prev: []; 'toggle-play': [] }>();
 const { settings } = useSettings();
 
+const VIEW_MODES = [
+  { id: 'map', label: 'Map', hint: 'Classic top-down parchment map' },
+  { id: 'flight', label: '✈ Flight', hint: 'Cinematic terrain flyover on each step' },
+  { id: 'hike', label: '🥾 Hike', hint: 'Ground-level traversal, up close to the terrain' },
+] as const;
+
 const stop = computed(() => {
   const stops = props.journey?.stops;
   if (!stops || !stops.length) return null;
@@ -55,13 +61,19 @@ const count = computed(() => props.journey?.stops.length ?? 0);
       title="Toggle the parchment info card on the map"
       @click="settings.showMapCard = !settings.showMapCard"
     >Card</button>
-    <button
-      class="btn whitespace-nowrap"
-      :style="settings.flightMode ? 'border-color: var(--gold)' : ''"
-      :aria-pressed="settings.flightMode"
-      title="Cinematic terrain flyover on each step"
-      @click="settings.flightMode = !settings.flightMode"
-    >✈ Flight</button>
+    <span class="flex overflow-hidden rounded border" style="border-color: var(--line)">
+      <button
+        v-for="m in VIEW_MODES"
+        :key="m.id"
+        class="whitespace-nowrap px-3 py-2 text-sm"
+        :style="settings.viewMode === m.id
+          ? 'background: var(--panel-2); color: var(--gold); font-weight: 700'
+          : 'background: transparent; color: var(--muted)'"
+        :aria-pressed="settings.viewMode === m.id"
+        :title="m.hint"
+        @click="settings.viewMode = m.id"
+      >{{ m.label }}</button>
+    </span>
     <span class="hidden text-xs sm:inline" style="color: var(--faint)">
       <kbd class="rounded border px-1" style="border-color: var(--line)">←</kbd>
       <kbd class="rounded border px-1" style="border-color: var(--line)">→</kbd>

@@ -159,9 +159,13 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   if (animating) updateCard(-1);
   else updateCard(clamped);
 
-  if (animating && settings.value.flightMode) {
+  if (animating && settings.value.viewMode === 'flight') {
     runFlight(paths[clamped - 1], paths, clamped);
     return; // the flight owns line drawing, camera, card, and completion
+  }
+  if (animating && settings.value.viewMode === 'hike') {
+    runHike(paths[clamped - 1], paths, clamped);
+    return;
   }
 
   if (animating) {
@@ -188,10 +192,13 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   // Camera
   if (moveCamera) {
     const duration = Math.max(0, settings.value.cameraMs);
-    if (settings.value.flightMode) {
-      // Non-flight transitions (back-step, jump) keep the chase pose.
+    if (settings.value.viewMode === 'flight') {
+      // Non-animated transitions (back-step, jump) keep the chase pose.
       const s = stops[clamped];
       map.easeTo({ center: [s.lng, s.lat], zoom: 10.8, pitch: 62, duration });
+    } else if (settings.value.viewMode === 'hike') {
+      const s = stops[clamped];
+      map.easeTo({ center: [s.lng, s.lat], zoom: 13.2, pitch: 80, duration });
     } else if (clamped === 0) {
       map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration });
     } else {
@@ -236,6 +243,64 @@ function runFlight(path: LngLat[], paths: LngLat[][], clamped: number): void {
   animFrame = requestAnimationFrame(tick);
 }
 
+/**
+ * Ground-level traversal: the free camera hangs ~180m over the trail a few
+ * hundred meters behind the traveler, pitched almost to the horizon, so the
+ * hills rise around you and the next stop walks in over the ridge line.
+ */
+function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
+  const lenDeg = pathLength(path);
+  const durationMs = Math.min(30000, Math.max(6000, 2500 + lenDeg * 111 * 90));
+  const PREROLL = 1700;
+  const start = pointAlong(path, 0.001);
+  let smooth = start.bearing;
+  let altSmooth: number | null = null;
+  map!.easeTo({ center: path[0], zoom: 13.2, pitch: 80, bearing: smooth, duration: PREROLL - 100 });
+  const begin = performance.now() + PREROLL;
+
+  const placeCamera = (cur: LngLat, bearingDeg: number, frac: number): void => {
+    const rad = (bearingDeg * Math.PI) / 180;
+    const backDeg = 420 / 111000; // camera ~420m behind the traveler
+    const back: LngLat = [
+      cur[0] - (Math.sin(rad) * backDeg) / Math.cos((cur[1] * Math.PI) / 180),
+      cur[1] - Math.cos(rad) * backDeg,
+    ];
+    const ground = Math.max(
+      map!.queryTerrainElevation({ lng: cur[0], lat: cur[1] }) ?? 0,
+      map!.queryTerrainElevation({ lng: back[0], lat: back[1] }) ?? 0,
+      0,
+    );
+    altSmooth = altSmooth === null ? ground : altSmooth + (ground - altSmooth) * 0.06;
+    const ahead = pointAlong(path, Math.min(1, frac + 0.05)).point;
+    const aheadElev = map!.queryTerrainElevation({ lng: ahead[0], lat: ahead[1] }) ?? 0;
+    const camOpts = map!.calculateCameraOptionsFromTo(
+      new maplibregl.LngLat(back[0], back[1]),
+      altSmooth + 180,
+      new maplibregl.LngLat(ahead[0], ahead[1]),
+      aheadElev + 40,
+    );
+    map!.jumpTo(camOpts);
+  };
+
+  const tick = (now: number) => {
+    if (now < begin) { animFrame = requestAnimationFrame(tick); return; }
+    const t = Math.min(1, (now - begin) / durationMs);
+    const eased = t * t * (3 - 2 * t);
+    const { point, bearing } = pointAlong(path, eased);
+    smooth += (((bearing - smooth + 540) % 360) - 180) * 0.06;
+    setSource('leg-active', [legLineString(slicePath(path, eased))]);
+    placeCamera(point, smooth, eased);
+    if (t < 1) animFrame = requestAnimationFrame(tick);
+    else {
+      setSource('legs-static', paths.slice(0, clamped).map(legLineString));
+      setSource('leg-active', []);
+      updateCard(clamped);
+      emit('leg-complete');
+    }
+  };
+  animFrame = requestAnimationFrame(tick);
+}
+
 function fitJourney(): void {
   const stops = props.journey?.stops ?? [];
   if (!map || !stops.length) return;
@@ -267,7 +332,7 @@ onMounted(async () => {
     style,
     center: [35.2, 31.6],
     zoom: 5.5,
-    maxPitch: 75,
+    maxPitch: 85,
     attributionControl: { compact: true, customAttribution: 'Region data © <a href="https://www.openbible.info/geo/">OpenBible.info</a> (CC-BY 4.0) · Terrain © <a href="https://registry.opendata.aws/terrain-tiles/">Mapzen/AWS</a>' },
   });
   map.on('load', () => {
@@ -344,7 +409,7 @@ onMounted(async () => {
     syncLabelScale();
     ready = true;
     applyOverlay();
-    setFlight(settings.value.flightMode, false);
+    applyViewMode(false);
     if (props.journey) { fitJourney(); renderStep(props.stepIndex, false, false); }
   });
 });
@@ -380,21 +445,24 @@ watch(() => settings.value.showMapCard, () => {
 
 watch(() => settings.value.activeOverlay, applyOverlay);
 
-function setFlight(on: boolean, animateCamera: boolean): void {
+function applyViewMode(animateCamera: boolean): void {
   if (!map || !ready) return;
-  if (on) {
-    map.setTerrain({ source: 'dem', exaggeration: 1.4 });
-    const s = props.journey?.stops[currentStep()];
-    if (animateCamera && s) {
-      map.easeTo({ center: [s.lng, s.lat], zoom: 10.8, pitch: 62, duration: 1400 });
-    }
-  } else {
+  const mode = settings.value.viewMode;
+  if (mode === 'map') {
     map.setTerrain(null);
     if (animateCamera) map.easeTo({ pitch: 0, bearing: 0, zoom: Math.min(map.getZoom(), 8), duration: 900 });
+    return;
+  }
+  // Lower exaggeration up close — hills read as cartoonish at hike altitude.
+  map.setTerrain({ source: 'dem', exaggeration: mode === 'hike' ? 1.15 : 1.4 });
+  const s = props.journey?.stops[currentStep()];
+  if (animateCamera && s) {
+    if (mode === 'flight') map.easeTo({ center: [s.lng, s.lat], zoom: 10.8, pitch: 62, duration: 1400 });
+    else map.easeTo({ center: [s.lng, s.lat], zoom: 13.2, pitch: 80, duration: 1400 });
   }
 }
 
-watch(() => settings.value.flightMode, (on) => setFlight(on, true));
+watch(() => settings.value.viewMode, () => applyViewMode(true));
 </script>
 
 <template>

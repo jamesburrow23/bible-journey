@@ -13,12 +13,12 @@ const { settings } = useSettings();
 const playback = usePlayback(
   () => activeJourney.value?.stops.length ?? 0,
   () => settings.value.playMs,
-  () => settings.value.flightMode, // flights pace playback via leg-complete
+  () => settings.value.viewMode !== 'map', // flights/hikes pace playback via leg-complete
 );
 
-// In flight mode, auto-play advances when each flyover lands.
+// In flight/hike mode, auto-play advances when each traversal lands.
 function onLegComplete(): void {
-  if (!playback.playing.value || !settings.value.flightMode) return;
+  if (!playback.playing.value || settings.value.viewMode === 'map') return;
   const count = activeJourney.value?.stops.length ?? 0;
   if (playback.stepIndex.value >= count - 1) {
     playback.togglePlay(); // journey finished — stop playing

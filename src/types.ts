@@ -52,6 +52,6 @@ export interface Settings {
   showMapCard: boolean;
   /** Active historical overlay preset id, or null for none. */
   activeOverlay: string | null;
-  /** Cinematic terrain-following chase camera on step transitions. */
-  flightMode: boolean;
+  /** Camera style: flat map, high chase flight, or ground-level hike. */
+  viewMode: 'map' | 'flight' | 'hike';
 }

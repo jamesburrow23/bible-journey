@@ -13,13 +13,19 @@ const DEFAULTS: Settings = {
   playMs: 1600,
   showMapCard: true,
   activeOverlay: null,
-  flightMode: false,
+  viewMode: 'map',
 };
 
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Migrate the pre-hike-mode boolean toggle.
+      if (parsed.flightMode && !parsed.viewMode) parsed.viewMode = 'flight';
+      delete parsed.flightMode;
+      return { ...DEFAULTS, ...parsed };
+    }
   } catch { /* corrupted storage falls back to defaults */ }
   return { ...DEFAULTS };
 }
