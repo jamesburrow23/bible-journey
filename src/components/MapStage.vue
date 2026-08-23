@@ -209,23 +209,25 @@ onMounted(async () => {
     style,
     center: [35.2, 31.6],
     zoom: 5.5,
-    attributionControl: { compact: true },
+    attributionControl: { compact: true, customAttribution: 'Region data © <a href="https://www.openbible.info/geo/">OpenBible.info</a> (CC-BY 4.0)' },
   });
   map.on('load', () => {
-    // Overlay layers first so historical regions sit under the journey.
+    // Overlay layers slot in BENEATH the basemap's water so seas and lakes
+    // clip the historical regions — a border can never trace over water.
+    const waterId = map!.getStyle().layers?.find((l: any) => l.type === 'fill' && /water/i.test(l.id))?.id;
     map!.addSource('overlay', { type: 'geojson', data: EMPTY });
     map!.addLayer({
       id: 'overlay-fill',
       type: 'fill',
       source: 'overlay',
       paint: { 'fill-color': ['get', 'fill'], 'fill-opacity': ['get', 'opacity'] },
-    });
+    }, waterId);
     map!.addLayer({
       id: 'overlay-outline',
       type: 'line',
       source: 'overlay',
       paint: { 'line-color': ['get', 'stroke'], 'line-width': 1.4, 'line-dasharray': [3, 2.5], 'line-opacity': 0.7 },
-    });
+    }, waterId);
     for (const id of ['legs-static', 'leg-active']) {
       map!.addSource(id, { type: 'geojson', data: EMPTY });
       map!.addLayer({

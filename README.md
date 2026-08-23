@@ -37,3 +37,7 @@ JSON backup, Import to restore.
 - [ ] Save, reload the page → journey and step position at 1, library intact.
 - [ ] Export, delete the journey, import → journey restored.
 - [ ] Wrong API key → clear inline error mentioning the key.
+
+## Data credits
+
+Historical overlay regions are derived from [OpenBible.info Bible Geocoding Data](https://github.com/openbibleinfo/Bible-Geocoding-Data) (CC-BY 4.0); the Israel/Judah kingdom outlines are traditional atlas approximations. Basemap tiles by [OpenFreeMap](https://openfreemap.org) / OpenStreetMap contributors.
