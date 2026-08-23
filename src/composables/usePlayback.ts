@@ -2,7 +2,7 @@ import { ref, getCurrentInstance, onUnmounted } from 'vue';
 
 export const PLAY_INTERVAL_MS = 1600;
 
-export function usePlayback(stopCount: () => number) {
+export function usePlayback(stopCount: () => number, intervalMs?: () => number) {
   const stepIndex = ref(0);
   const playing = ref(false);
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -35,7 +35,7 @@ export function usePlayback(stopCount: () => number) {
       if (stepIndex.value >= stopCount() - 1) { stopTimer(); return; }
       next();
       if (stepIndex.value >= stopCount() - 1) stopTimer();
-    }, PLAY_INTERVAL_MS);
+    }, intervalMs?.() ?? PLAY_INTERVAL_MS);
   }
 
   function onKeydown(e: KeyboardEvent): void {

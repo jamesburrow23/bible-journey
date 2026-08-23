@@ -8,6 +8,10 @@ const DEFAULTS: Settings = {
   geminiApiKey: '',
   geminiModel: 'gemini-3.1-flash',
   customPrompt: null,
+  drawMs: 1100,
+  cameraMs: 800,
+  playMs: 1600,
+  showMapCard: true,
 };
 
 function load(): Settings {

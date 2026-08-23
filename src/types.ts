@@ -36,4 +36,12 @@ export interface Settings {
   geminiApiKey: string;
   geminiModel: string;
   customPrompt: string | null;
+  /** Leg draw animation duration (ms). */
+  drawMs: number;
+  /** Camera pan/zoom duration (ms). */
+  cameraMs: number;
+  /** Auto-play pace between stops (ms). */
+  playMs: number;
+  /** Show the parchment info card on the map at the current stop. */
+  showMapCard: boolean;
 }

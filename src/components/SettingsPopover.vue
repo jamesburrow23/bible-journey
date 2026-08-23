@@ -15,6 +15,24 @@ const { settings } = useSettings();
       <p class="mb-3 mt-1 text-xs" style="color: var(--faint)">Stored only in this browser's localStorage.</p>
       <label class="mb-1 block text-sm" for="bj-model">Model</label>
       <input id="bj-model" v-model="settings.geminiModel" type="text" />
+
+      <h2 class="sec-title mb-3 mt-5">Presentation speed</h2>
+      <div class="flex flex-col gap-3">
+        <label class="block text-sm" for="bj-draw">
+          <span class="flex justify-between">Line draw <span class="font-mono-num text-xs" style="color: var(--muted)">{{ settings.drawMs }} ms</span></span>
+          <input id="bj-draw" v-model.number="settings.drawMs" type="range" min="300" max="3000" step="100" class="w-full" />
+        </label>
+        <label class="block text-sm" for="bj-camera">
+          <span class="flex justify-between">Camera glide <span class="font-mono-num text-xs" style="color: var(--muted)">{{ settings.cameraMs }} ms</span></span>
+          <input id="bj-camera" v-model.number="settings.cameraMs" type="range" min="0" max="2000" step="100" class="w-full" />
+        </label>
+        <label class="block text-sm" for="bj-play">
+          <span class="flex justify-between">Auto-play pace <span class="font-mono-num text-xs" style="color: var(--muted)">{{ settings.playMs }} ms</span></span>
+          <input id="bj-play" v-model.number="settings.playMs" type="range" min="800" max="5000" step="200" class="w-full" />
+        </label>
+      </div>
+      <p class="mt-2 text-xs" style="color: var(--faint)">Auto-play pace applies the next time you press Play.</p>
+
       <div class="mt-4 flex justify-end">
         <button class="btn" @click="emit('close')">Done</button>
       </div>

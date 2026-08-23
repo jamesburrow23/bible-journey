@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { Journey } from '../types';
+import { useSettings } from '../composables/useSettings';
 
 const props = defineProps<{ journey: Journey | null; stepIndex: number; playing: boolean }>();
 const emit = defineEmits<{ next: []; prev: []; 'toggle-play': [] }>();
+const { settings } = useSettings();
 
 const stop = computed(() => {
   const stops = props.journey?.stops;
@@ -46,6 +48,13 @@ const count = computed(() => props.journey?.stops.length ?? 0);
     <button class="btn whitespace-nowrap" @click="emit('toggle-play')">
       {{ playing ? '❚❚ Pause' : '▶ Play journey' }}
     </button>
+    <button
+      class="btn whitespace-nowrap"
+      :style="settings.showMapCard ? 'border-color: var(--gold)' : ''"
+      :aria-pressed="settings.showMapCard"
+      title="Toggle the parchment info card on the map"
+      @click="settings.showMapCard = !settings.showMapCard"
+    >Card</button>
     <span class="hidden text-xs sm:inline" style="color: var(--faint)">
       <kbd class="rounded border px-1" style="border-color: var(--line)">←</kbd>
       <kbd class="rounded border px-1" style="border-color: var(--line)">→</kbd>

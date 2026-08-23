@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import maplibregl from 'maplibre-gl';
-import type { Journey } from '../types';
+import type { Journey, Stop } from '../types';
 import { loadParchmentStyle } from '../services/mapStyle';
 import { legPathsFromStops, slicePath, legLineString } from '../services/route';
+import { useSettings } from '../composables/useSettings';
 
 const props = defineProps<{ journey: Journey | null; stepIndex: number }>();
+const { settings } = useSettings();
 
 const container = ref<HTMLDivElement>();
 const mapError = ref('');
 let map: maplibregl.Map | null = null;
-let markers: maplibregl.Marker[] = [];
+let labelMarkers: maplibregl.Marker[] = [];
+let cardMarker: maplibregl.Marker | null = null;
+const cardEl = document.createElement('div');
+cardEl.className = 'bj-card';
 let ready = false;
 let animFrame = 0;
 let suppressNextStepCamera = false;
@@ -19,11 +24,14 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-function makeMarkerEl(name: string): HTMLElement {
-  const el = document.createElement('div');
-  el.className = 'bj-marker';
-  el.innerHTML = `<span class="bj-dot"></span><span class="bj-label">${name.replace(/</g, '&lt;')}</span>`;
-  return el;
+// Dots and lines are native map layers so they share the map's projection
+// and zoom scaling exactly — they cannot drift apart the way DOM markers can.
+const LINE_WIDTH: any = ['interpolate', ['linear'], ['zoom'], 4, 2.2, 7, 3.5, 10, 5.5];
+const DOT_RADIUS: any = ['interpolate', ['linear'], ['zoom'], 4, 4, 7, 5.5, 10, 8];
+const HALO_RADIUS: any = ['interpolate', ['linear'], ['zoom'], 4, 9, 7, 12, 10, 17];
+
+function currentStep(): number {
+  return Math.min(props.stepIndex, (props.journey?.stops.length ?? 1) - 1);
 }
 
 function setSource(id: string, features: GeoJSON.Feature[]): void {
@@ -32,20 +40,58 @@ function setSource(id: string, features: GeoJSON.Feature[]): void {
 
 function clearAll(): void {
   cancelAnimationFrame(animFrame);
-  markers.forEach((m) => m.remove());
-  markers = [];
-  if (ready) { setSource('legs-static', []); setSource('leg-active', []); }
+  labelMarkers.forEach((m) => m.remove());
+  labelMarkers = [];
+  cardMarker?.remove();
+  cardMarker = null;
+  if (ready) { setSource('legs-static', []); setSource('leg-active', []); setSource('stops', []); }
 }
 
-function showMarkersUpTo(step: number): void {
-  markers.forEach((m) => m.remove());
-  markers = [];
+function showStops(step: number): void {
   const stops = props.journey?.stops ?? [];
-  stops.slice(0, step + 1).forEach((s, i) => {
-    const el = makeMarkerEl(s.name);
-    if (i === step && !reducedMotion) el.classList.add('bj-current');
-    markers.push(new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([s.lng, s.lat]).addTo(map!));
+  const visible = stops.slice(0, step + 1);
+  setSource('stops', visible.map((s, i): GeoJSON.Feature => ({
+    type: 'Feature',
+    properties: { current: i === step },
+    geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
+  })));
+  labelMarkers.forEach((m) => m.remove());
+  labelMarkers = [];
+  visible.forEach((s) => {
+    const el = document.createElement('div');
+    el.className = 'bj-label';
+    el.textContent = s.name;
+    labelMarkers.push(
+      new maplibregl.Marker({ element: el, anchor: 'left', offset: [12, 0] }).setLngLat([s.lng, s.lat]).addTo(map!),
+    );
   });
+}
+
+function updateCard(step: number): void {
+  const s: Stop | undefined = props.journey?.stops[step];
+  if (!ready || !s || !settings.value.showMapCard) {
+    cardMarker?.remove();
+    cardMarker = null;
+    return;
+  }
+  cardEl.replaceChildren();
+  const name = document.createElement('div');
+  name.className = 'bj-card-name';
+  name.textContent = s.name;
+  const ref_ = document.createElement('div');
+  ref_.className = 'bj-card-ref';
+  ref_.textContent = s.verseRef;
+  const event = document.createElement('div');
+  event.className = 'bj-card-event';
+  event.textContent = s.event;
+  cardEl.append(name, ref_, event);
+  if (!cardMarker) {
+    cardMarker = new maplibregl.Marker({ element: cardEl, anchor: 'left', offset: [26, -10] })
+      .setLngLat([s.lng, s.lat])
+      .addTo(map!);
+  } else {
+    cardMarker.setLngLat([s.lng, s.lat]);
+  }
 }
 
 function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
@@ -55,7 +101,8 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   if (!stops.length) {
     setSource('legs-static', []);
     setSource('leg-active', []);
-    showMarkersUpTo(-1);
+    showStops(-1);
+    updateCard(-1);
     return;
   }
   const paths = legPathsFromStops(stops);
@@ -63,18 +110,27 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   const staticCount = animate ? clamped - 1 : clamped;
   setSource('legs-static', paths.slice(0, Math.max(0, staticCount)).map(legLineString));
   setSource('leg-active', []);
-  showMarkersUpTo(clamped);
+  showStops(clamped);
 
-  if (animate && clamped > 0 && !reducedMotion) {
+  const animating = animate && clamped > 0 && !reducedMotion;
+  // The card lands with the traveler: hidden while the leg is drawing.
+  if (animating) updateCard(-1);
+  else updateCard(clamped);
+
+  if (animating) {
     const path = paths[clamped - 1];
     const start = performance.now();
-    const DURATION = 1100;
+    const duration = Math.max(100, settings.value.drawMs);
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / DURATION);
+      const t = Math.min(1, (now - start) / duration);
       const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
       setSource('leg-active', [legLineString(slicePath(path, eased))]);
       if (t < 1) animFrame = requestAnimationFrame(tick);
-      else { setSource('legs-static', paths.slice(0, clamped).map(legLineString)); setSource('leg-active', []); }
+      else {
+        setSource('legs-static', paths.slice(0, clamped).map(legLineString));
+        setSource('leg-active', []);
+        updateCard(clamped);
+      }
     };
     animFrame = requestAnimationFrame(tick);
   } else if (animate && clamped > 0) {
@@ -83,13 +139,14 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
 
   // Camera
   if (moveCamera) {
+    const duration = Math.max(0, settings.value.cameraMs);
     if (clamped === 0) {
-      map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration: 800 });
+      map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration });
     } else {
       const path = paths[clamped - 1];
       const b = new maplibregl.LngLatBounds(path[0], path[0]);
       path.forEach((p) => b.extend(p));
-      map.fitBounds(b, { padding: 120, duration: 800, maxZoom: 9 });
+      map.fitBounds(b, { padding: 120, duration, maxZoom: 9 });
     }
   }
 }
@@ -104,6 +161,12 @@ function fitJourney(): void {
   const b = new maplibregl.LngLatBounds([stops[0].lng, stops[0].lat], [stops[0].lng, stops[0].lat]);
   stops.forEach((s) => b.extend([s.lng, s.lat]));
   map.fitBounds(b, { padding: 80, duration: 0 });
+}
+
+function syncLabelScale(): void {
+  if (!map || !container.value) return;
+  const size = Math.max(11, Math.min(24, 16 * Math.pow(1.15, map.getZoom() - 5.5)));
+  container.value.style.setProperty('--bj-label-size', `${size.toFixed(1)}px`);
 }
 
 onMounted(async () => {
@@ -128,10 +191,37 @@ onMounted(async () => {
         id,
         type: 'line',
         source: id,
-        paint: { 'line-color': '#A93226', 'line-width': 3.5, 'line-dasharray': [2.2, 1.8] },
+        paint: { 'line-color': '#A93226', 'line-width': LINE_WIDTH, 'line-dasharray': [2.2, 1.8] },
         layout: { 'line-cap': 'round' },
       });
     }
+    map!.addSource('stops', { type: 'geojson', data: EMPTY });
+    map!.addLayer({
+      id: 'stop-halo',
+      type: 'circle',
+      source: 'stops',
+      filter: ['==', ['get', 'current'], true],
+      paint: {
+        'circle-color': 'rgba(169, 50, 38, 0.16)',
+        'circle-stroke-color': '#A93226',
+        'circle-stroke-width': 1.5,
+        'circle-stroke-opacity': 0.5,
+        'circle-radius': HALO_RADIUS,
+      },
+    });
+    map!.addLayer({
+      id: 'stop-dots',
+      type: 'circle',
+      source: 'stops',
+      paint: {
+        'circle-color': '#A93226',
+        'circle-stroke-color': '#F1E6C8',
+        'circle-stroke-width': 2,
+        'circle-radius': DOT_RADIUS,
+      },
+    });
+    map!.on('zoom', syncLabelScale);
+    syncLabelScale();
     ready = true;
     if (props.journey) { fitJourney(); renderStep(props.stepIndex, false, false); }
   });
@@ -159,6 +249,10 @@ watch(() => props.stepIndex, (n, o) => {
   suppressNextStepCamera = false;
   if (ready) renderStep(n, n === (o ?? 0) + 1, moveCam);
 });
+
+watch(() => settings.value.showMapCard, () => {
+  if (ready && props.journey) updateCard(currentStep());
+});
 </script>
 
 <template>
@@ -175,25 +269,45 @@ watch(() => props.stepIndex, (n, o) => {
 </template>
 
 <style>
-/* The marker element is exactly the dot, so MapLibre's center anchor lands
-   the dot on the coordinate; the label hangs off it without shifting it. */
-.bj-marker { position: relative; width: 11px; height: 11px; pointer-events: none; }
-.bj-dot {
-  position: absolute; inset: 0; border-radius: 50%;
-  background: var(--route); border: 2px solid #f1e6c8; box-shadow: 0 0 0 1px rgba(74, 59, 34, 0.4);
-}
-.bj-current .bj-dot { animation: bj-pulse 1.6s ease-out infinite; }
-@keyframes bj-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(169, 50, 38, 0.55); }
-  100% { box-shadow: 0 0 0 14px rgba(169, 50, 38, 0); }
-}
 .bj-label {
-  position: absolute; left: 17px; top: 50%; transform: translateY(-50%);
-  font-family: 'IM Fell English', serif; font-size: 16px; color: var(--map-ink);
+  font-family: 'IM Fell English', serif;
+  font-size: var(--bj-label-size, 16px);
+  color: var(--map-ink);
   text-shadow: 0 0 3px var(--parchment), 0 0 6px var(--parchment), 0 0 9px var(--parchment);
   white-space: nowrap;
+  pointer-events: none;
 }
-@media (prefers-reduced-motion: reduce) {
-  .bj-current .bj-dot { animation: none; }
+.bj-card {
+  max-width: 240px;
+  background: linear-gradient(160deg, #f0e5c8, #e4d5af);
+  border: 1px solid #b09a68;
+  outline: 1px solid rgba(176, 154, 104, 0.55);
+  outline-offset: -5px;
+  box-shadow: 2px 4px 14px rgba(40, 30, 10, 0.35);
+  padding: 11px 14px 12px;
+  transform: rotate(-1.4deg);
+  pointer-events: none;
+}
+.bj-card-name {
+  font-family: 'IM Fell English SC', serif;
+  font-size: 17px;
+  line-height: 1.15;
+  color: #4a3b22;
+}
+.bj-card-ref {
+  font-family: 'Alegreya Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #8c6d3f;
+  margin: 3px 0 5px;
+}
+.bj-card-event {
+  font-family: 'IM Fell English', serif;
+  font-style: italic;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: #5a492d;
 }
 </style>

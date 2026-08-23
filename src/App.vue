@@ -6,9 +6,11 @@ import MapStage from './components/MapStage.vue';
 import PresentationBar from './components/PresentationBar.vue';
 import { useJourneys } from './composables/useJourneys';
 import { usePlayback } from './composables/usePlayback';
+import { useSettings } from './composables/useSettings';
 
 const { activeJourney } = useJourneys();
-const playback = usePlayback(() => activeJourney.value?.stops.length ?? 0);
+const { settings } = useSettings();
+const playback = usePlayback(() => activeJourney.value?.stops.length ?? 0, () => settings.value.playMs);
 
 const collapsed = ref(false);
 const settingsOpen = ref(false);
