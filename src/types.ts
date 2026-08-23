@@ -1,5 +1,10 @@
 export type CoordSource = 'gazetteer' | 'model' | 'manual';
 
+export interface Waypoint {
+  lat: number;
+  lng: number;
+}
+
 export interface RawStop {
   name: string;
   modernHint: string;
@@ -7,6 +12,10 @@ export interface RawStop {
   lng: number;
   event: string;
   verseRef: string;
+  /** Intermediate waypoints tracing the route from the previous stop. */
+  via?: Waypoint[];
+  /** How the traveler reached this stop from the previous one. */
+  legMode?: 'land' | 'sea';
 }
 
 export interface Stop extends RawStop {

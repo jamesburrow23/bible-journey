@@ -30,6 +30,26 @@ describe('parseGeminiResponse', () => {
     const body = { candidates: [{ content: { parts: [{ text: JSON.stringify([{ name: 'X' }]) }] } }] };
     expect(() => parseGeminiResponse(body)).toThrow(GeminiError);
   });
+  it('joins multiple text parts before parsing (grounded responses)', () => {
+    const half = stopJson.length >> 1;
+    const body = {
+      candidates: [{ content: { parts: [{ text: stopJson.slice(0, half) }, { text: stopJson.slice(half) }] } }],
+    };
+    expect(parseGeminiResponse(body)).toHaveLength(1);
+  });
+  it('passes through via waypoints and legMode, defaulting when absent or malformed', () => {
+    const body = {
+      candidates: [{ content: { parts: [{ text: JSON.stringify([
+        { name: 'A', lat: 1, lng: 2, event: 'e', verseRef: 'v' },
+        { name: 'B', lat: 3, lng: 4, event: 'e', verseRef: 'v', legMode: 'sea', via: [{ lat: 5, lng: 6 }, { lat: 'x' }] },
+      ]) }] } }],
+    };
+    const [a, b] = parseGeminiResponse(body);
+    expect(a.via).toEqual([]);
+    expect(a.legMode).toBe('land');
+    expect(b.legMode).toBe('sea');
+    expect(b.via).toEqual([{ lat: 5, lng: 6 }]); // malformed waypoint dropped
+  });
 });
 
 describe('extractStops', () => {
@@ -48,6 +68,7 @@ describe('extractStops', () => {
     const payload = JSON.parse(String(init!.body));
     expect(payload.contents[0].parts[0].text).toContain('passage');
     expect(payload.generationConfig.responseMimeType).toBe('application/json');
+    expect(payload.tools).toEqual([{ google_search: {} }]); // search grounding enabled
   });
 
   it('retries once on invalid JSON, then succeeds', async () => {

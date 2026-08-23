@@ -1,6 +1,6 @@
 import type { RawStop } from '../types';
 
-export const DEFAULT_PROMPT = `You are a biblical geography assistant. From the passage below, extract every place a character travels to or through, in narrative order. For each stop return: name (the biblical place name), modernHint (nearest modern location), lat and lng (best-guess coordinates of the ancient site, in decimal degrees), event (a one-sentence summary of what happens there, suitable for children), and verseRef (book chapter:verse). Only include places on the journey itself, not places merely mentioned. Return JSON only.`;
+export const DEFAULT_PROMPT = `You are a biblical geography assistant with access to Google Search. From the passage below, extract every place a character travels to or through, in narrative order. For each stop return: name (the biblical place name), modernHint (the identified modern location or archaeological site), lat and lng (decimal-degree coordinates of the ancient site), event (a one-sentence summary of what happens there, suitable for children), verseRef (book chapter:verse), legMode ("land" or "sea" — how the traveler reached this stop from the previous stop), and via (2-5 intermediate {lat, lng} waypoints tracing the historically plausible route from the previous stop: follow ancient roads such as the Via Maris, the King's Highway, or the Fertile Crescent arc for land travel, and coastal shipping lanes for sea travel; never route a land journey across open water; the first stop's via is an empty array). Coordinate accuracy is critical — an incorrect location is a total failure. If you are not fully certain of a place's location, use Google Search to find the identified ancient site (tell, ruin, or modern successor town) and use its coordinates. Only include places on the journey itself, not places merely mentioned. Return JSON only.`;
 
 const RESPONSE_SCHEMA = {
   type: 'ARRAY',
@@ -13,6 +13,15 @@ const RESPONSE_SCHEMA = {
       lng: { type: 'NUMBER' },
       event: { type: 'STRING' },
       verseRef: { type: 'STRING' },
+      legMode: { type: 'STRING', enum: ['land', 'sea'] },
+      via: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: { lat: { type: 'NUMBER' }, lng: { type: 'NUMBER' } },
+          required: ['lat', 'lng'],
+        },
+      },
     },
     required: ['name', 'lat', 'lng', 'event', 'verseRef'],
   },
@@ -30,8 +39,12 @@ export class GeminiError extends Error {
 }
 
 export function parseGeminiResponse(body: unknown): RawStop[] {
-  const text = (body as any)?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== 'string') {
+  // Grounded responses can split the answer across several text parts.
+  const parts = (body as any)?.candidates?.[0]?.content?.parts;
+  const text = Array.isArray(parts)
+    ? parts.map((p: any) => (typeof p?.text === 'string' ? p.text : '')).join('')
+    : undefined;
+  if (typeof text !== 'string' || text === '') {
     throw new GeminiError('Gemini returned an empty response. Try again.', JSON.stringify(body).slice(0, 500));
   }
   let data: unknown;
@@ -55,6 +68,12 @@ export function parseGeminiResponse(body: unknown): RawStop[] {
       lng: s.lng,
       event: s.event,
       verseRef: s.verseRef,
+      legMode: s.legMode === 'sea' ? 'sea' as const : 'land' as const,
+      via: Array.isArray(s.via)
+        ? s.via
+            .filter((w: any) => typeof w?.lat === 'number' && typeof w?.lng === 'number')
+            .map((w: any) => ({ lat: w.lat, lng: w.lng }))
+        : [],
     };
   });
 }
@@ -68,6 +87,7 @@ async function callOnce(passage: string, prompt: string, apiKey: string, model: 
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: `${prompt}\n\nPASSAGE:\n${passage}` }] }],
+        tools: [{ google_search: {} }],
         generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA },
       }),
     });

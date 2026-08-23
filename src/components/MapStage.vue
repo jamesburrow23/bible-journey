@@ -3,7 +3,7 @@ import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import maplibregl from 'maplibre-gl';
 import type { Journey } from '../types';
 import { loadParchmentStyle } from '../services/mapStyle';
-import { legsFromStops, sliceLeg, legLineString, type LngLat } from '../services/route';
+import { legPathsFromStops, slicePath, legLineString } from '../services/route';
 
 const props = defineProps<{ journey: Journey | null; stepIndex: number }>();
 
@@ -58,27 +58,27 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
     showMarkersUpTo(-1);
     return;
   }
-  const legs = legsFromStops(stops);
+  const paths = legPathsFromStops(stops);
   const clamped = Math.min(step, stops.length - 1);
   const staticCount = animate ? clamped - 1 : clamped;
-  setSource('legs-static', legs.slice(0, Math.max(0, staticCount)).map(legLineString));
+  setSource('legs-static', paths.slice(0, Math.max(0, staticCount)).map(legLineString));
   setSource('leg-active', []);
   showMarkersUpTo(clamped);
 
   if (animate && clamped > 0 && !reducedMotion) {
-    const [from, to] = legs[clamped - 1];
+    const path = paths[clamped - 1];
     const start = performance.now();
     const DURATION = 1100;
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / DURATION);
       const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-      setSource('leg-active', [legLineString(sliceLeg(from, to, eased))]);
+      setSource('leg-active', [legLineString(slicePath(path, eased))]);
       if (t < 1) animFrame = requestAnimationFrame(tick);
-      else { setSource('legs-static', legs.slice(0, clamped).map(legLineString)); setSource('leg-active', []); }
+      else { setSource('legs-static', paths.slice(0, clamped).map(legLineString)); setSource('leg-active', []); }
     };
     animFrame = requestAnimationFrame(tick);
   } else if (animate && clamped > 0) {
-    setSource('legs-static', legs.slice(0, clamped).map(legLineString));
+    setSource('legs-static', paths.slice(0, clamped).map(legLineString));
   }
 
   // Camera
@@ -86,8 +86,10 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
     if (clamped === 0) {
       map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration: 800 });
     } else {
-      const [from, to] = legs[clamped - 1] as [LngLat, LngLat];
-      map.fitBounds(new maplibregl.LngLatBounds(from, from).extend(to), { padding: 120, duration: 800, maxZoom: 9 });
+      const path = paths[clamped - 1];
+      const b = new maplibregl.LngLatBounds(path[0], path[0]);
+      path.forEach((p) => b.extend(p));
+      map.fitBounds(b, { padding: 120, duration: 800, maxZoom: 9 });
     }
   }
 }
@@ -140,6 +142,9 @@ onBeforeUnmount(() => { cancelAnimationFrame(animFrame); map?.remove(); });
 watch(() => props.journey?.id, () => {
   if (!ready) return;
   suppressNextStepCamera = true;
+  // If the step reset is a no-op (already at 0), the stepIndex watcher never
+  // fires to consume the flag — clear it once this flush cycle completes.
+  queueMicrotask(() => { suppressNextStepCamera = false; });
   clearAll();
   if (props.journey) { fitJourney(); renderStep(0, false, false); }
 });
@@ -170,11 +175,12 @@ watch(() => props.stepIndex, (n, o) => {
 </template>
 
 <style>
-.bj-marker { display: flex; align-items: center; gap: 6px; pointer-events: none; }
+/* The marker element is exactly the dot, so MapLibre's center anchor lands
+   the dot on the coordinate; the label hangs off it without shifting it. */
+.bj-marker { position: relative; width: 11px; height: 11px; pointer-events: none; }
 .bj-dot {
-  width: 11px; height: 11px; border-radius: 50%;
+  position: absolute; inset: 0; border-radius: 50%;
   background: var(--route); border: 2px solid #f1e6c8; box-shadow: 0 0 0 1px rgba(74, 59, 34, 0.4);
-  flex: none;
 }
 .bj-current .bj-dot { animation: bj-pulse 1.6s ease-out infinite; }
 @keyframes bj-pulse {
@@ -182,6 +188,7 @@ watch(() => props.stepIndex, (n, o) => {
   100% { box-shadow: 0 0 0 14px rgba(169, 50, 38, 0); }
 }
 .bj-label {
+  position: absolute; left: 17px; top: 50%; transform: translateY(-50%);
   font-family: 'IM Fell English', serif; font-size: 16px; color: var(--map-ink);
   text-shadow: 0 0 3px var(--parchment), 0 0 6px var(--parchment), 0 0 9px var(--parchment);
   white-space: nowrap;

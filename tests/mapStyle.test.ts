@@ -15,6 +15,7 @@ const fixture = {
     { id: 'place-city', type: 'symbol', paint: {} },
     { id: 'label-country', type: 'symbol', paint: {} },
     { id: 'boundary-admin', type: 'line', paint: {} },
+    { id: 'water-name-ocean', type: 'symbol', paint: {} },
   ],
 };
 
@@ -22,26 +23,27 @@ describe('toParchment', () => {
   const out = toParchment(fixture);
   const ids = out.layers.map((l: any) => l.id);
 
-  it('drops roads, buildings, POIs, and modern city labels', () => {
+  it('drops roads, buildings, POIs, boundaries, and every non-water label', () => {
     expect(ids).not.toContain('highway-major');
     expect(ids).not.toContain('building');
     expect(ids).not.toContain('poi-level-1');
     expect(ids).not.toContain('place-city');
+    expect(ids).not.toContain('label-country');
+    expect(ids).not.toContain('boundary-admin');
   });
 
-  it('keeps and recolors background, water, land, boundaries, country labels', () => {
+  it('keeps and recolors background, water, land, and sea labels', () => {
     expect(out.layers.find((l: any) => l.id === 'background').paint['background-color']).toBe('#E8DBB7');
     expect(out.layers.find((l: any) => l.id === 'water').paint['fill-color']).toBe('#A9C2B4');
     expect(out.layers.find((l: any) => l.id === 'waterway-river').paint['line-color']).toBe('#7E9A8B');
     expect(out.layers.find((l: any) => l.id === 'landcover-grass').paint['fill-color']).toBe('#DFD0A4');
-    expect(out.layers.find((l: any) => l.id === 'boundary-admin').paint['line-color']).toBe('#B9A576');
-    const country = out.layers.find((l: any) => l.id === 'label-country');
-    expect(country.paint['text-color']).toBe('#8A7448');
-    expect(country.paint['text-halo-color']).toBe('#E8DBB7');
+    const ocean = out.layers.find((l: any) => l.id === 'water-name-ocean');
+    expect(ocean.paint['text-color']).toBe('#8A7448');
+    expect(ocean.paint['text-halo-color']).toBe('#E8DBB7');
   });
 
   it('does not mutate the input style', () => {
     expect(fixture.layers.find((l) => l.id === 'water')!.paint!['fill-color']).toBe('blue');
-    expect(fixture.layers).toHaveLength(10);
+    expect(fixture.layers).toHaveLength(11);
   });
 });

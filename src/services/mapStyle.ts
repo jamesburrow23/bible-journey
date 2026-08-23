@@ -1,7 +1,7 @@
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
-const HIDE = /poi|transit|road|highway|motorway|bridge|tunnel|rail|building|housen|aeroway|ferry|path|airport|oneway|pattern/i;
-const KEEP_LABEL = /country|continent|ocean|sea/i;
+const HIDE = /poi|transit|road|highway|motorway|bridge|tunnel|rail|building|housen|aeroway|ferry|path|airport|oneway|pattern|boundary/i;
+const KEEP_LABEL = /ocean|sea/i;
 
 export function toParchment(style: any): any {
   const s = structuredClone(style);
