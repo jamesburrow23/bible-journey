@@ -397,7 +397,13 @@ function runFlight(path: LngLat[], paths: LngLat[][], clamped: number): void {
  */
 function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
   const lenDeg = pathLength(path);
-  const durationMs = Math.min(25000, Math.max(7000, 3000 + lenDeg * 111 * 70));
+  const lenKm = lenDeg * 111;
+  const durationMs = Math.min(25000, Math.max(7000, 3000 + lenKm * 70));
+  // Ground level for short legs; longer legs lift the camera (and lengthen
+  // the trail) so the ground speed stays renderable and the line visible —
+  // at 140m altitude a 100km leg means several km/s over unloadable tiles.
+  const camAlt = Math.min(1500, 140 + Math.max(0, lenKm - 15) * 12);
+  const trailM = Math.min(15000, 1400 + Math.max(0, lenKm - 15) * 120);
   const PREROLL = 1700;
   const start = pointAlong(path, 0.001);
   let smooth = start.bearing;
@@ -412,7 +418,7 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
     const rad = (bearingDeg * Math.PI) / 180;
     // Far enough behind that the painted line's tip sits visibly ahead
     // in the lower-middle of the frame while it draws.
-    const backDeg = 1400 / 111000;
+    const backDeg = trailM / 111000;
     const back: LngLat = [
       cur[0] - (Math.sin(rad) * backDeg) / Math.cos((cur[1] * Math.PI) / 180),
       cur[1] - Math.cos(rad) * backDeg,
@@ -428,20 +434,26 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
     const aheadElev = map!.queryTerrainElevation({ lng: ahead[0], lat: ahead[1] }) ?? 0;
     const camOpts = map!.calculateCameraOptionsFromTo(
       new maplibregl.LngLat(back[0], back[1]),
-      altSmooth + 140,
+      altSmooth + camAlt,
       new maplibregl.LngLat(ahead[0], ahead[1]),
-      aheadElev + 110,
+      aheadElev + camAlt * 0.8,
     );
     map!.jumpTo(camOpts);
   };
 
+  let lastPaint = 0;
   const tick = (now: number) => {
     if (now < begin) { animFrame = requestAnimationFrame(tick); return; }
     const t = Math.min(1, (now - begin) / durationMs);
     const eased = t * t * (3 - 2 * t);
     const { point, bearing } = pointAlong(path, eased);
     smooth += (((bearing - smooth + 540) % 360) - 180) * 0.06;
-    setSource('leg-active', [legLineString(slicePath(path, eased))]);
+    // Throttle line updates — re-tiling the GeoJSON every frame while the
+    // camera races starves the renderer and the line never shows.
+    if (now - lastPaint > 80 || t === 1) {
+      lastPaint = now;
+      setSource('leg-active', [legLineString(slicePath(path, eased))]);
+    }
     placeCamera(point, smooth, eased);
     if (t < 1) animFrame = requestAnimationFrame(tick);
     else {
