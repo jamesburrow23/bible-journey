@@ -82,7 +82,7 @@ function showStops(step: number): void {
   const visible = stops.slice(0, step + 1);
   setSource('stops', visible.map((s, i): GeoJSON.Feature => ({
     type: 'Feature',
-    properties: { current: i === step },
+    properties: { current: i === step, ...(s.color ? { color: s.color } : {}) },
     geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
   })));
   labelMarkers.forEach((m) => m.remove());
@@ -195,10 +195,20 @@ function viaOf(i: number): { lat: number; lng: number }[] {
   return props.journey?.stops[i].via ?? [];
 }
 
+/** Leg features carrying each leg's trail color (from its arrival stop). */
+function legFeatures(paths: LngLat[][], stops: Stop[]): GeoJSON.Feature[] {
+  return paths.map((p, i) => legLineString(p, stops[i + 1]?.color ? { color: stops[i + 1].color } : {}));
+}
+
+function legColorProps(stop: Stop | undefined): Record<string, unknown> {
+  return stop?.color ? { color: stop.color } : {};
+}
+
 /** Show the whole route, optionally from a temporary stops array mid-drag. */
 function renderEditLines(tempStops?: Stop[]): void {
   if (!map || !ready || !props.journey) return;
-  setSource('legs-static', legPathsFromStops(tempStops ?? props.journey.stops).map(legLineString));
+  const stops = tempStops ?? props.journey.stops;
+  setSource('legs-static', legFeatures(legPathsFromStops(stops), stops));
   setSource('leg-active', []);
 }
 
@@ -316,7 +326,7 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   const paths = legPathsFromStops(stops);
   const clamped = Math.min(step, stops.length - 1);
   const staticCount = animate ? clamped - 1 : clamped;
-  setSource('legs-static', paths.slice(0, Math.max(0, staticCount)).map(legLineString));
+  setSource('legs-static', legFeatures(paths, stops).slice(0, Math.max(0, staticCount)));
   setSource('leg-active', []);
   showStops(clamped);
 
@@ -341,10 +351,10 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
       const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-      setSource('leg-active', [legLineString(slicePath(path, eased))]);
+      setSource('leg-active', [legLineString(slicePath(path, eased), legColorProps(props.journey!.stops[clamped]))]);
       if (t < 1) animFrame = requestAnimationFrame(tick);
       else {
-        setSource('legs-static', paths.slice(0, clamped).map(legLineString));
+        setSource('legs-static', legFeatures(paths, props.journey!.stops).slice(0, clamped));
         setSource('leg-active', []);
         updateCard(clamped);
         emit('leg-complete');
@@ -352,7 +362,7 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
     };
     animFrame = requestAnimationFrame(tick);
   } else if (animate && clamped > 0) {
-    setSource('legs-static', paths.slice(0, clamped).map(legLineString));
+    setSource('legs-static', legFeatures(paths, props.journey!.stops).slice(0, clamped));
   }
 
   // Camera
@@ -396,11 +406,11 @@ function runFlight(path: LngLat[], paths: LngLat[][], clamped: number): void {
     const eased = t * t * (3 - 2 * t); // smoothstep: gentle take-off and landing
     const { point, bearing } = pointAlong(path, eased);
     smooth += (((bearing - smooth + 540) % 360) - 180) * 0.08;
-    setSource('leg-active', [legLineString(slicePath(path, eased))]);
+    setSource('leg-active', [legLineString(slicePath(path, eased), legColorProps(props.journey!.stops[clamped]))]);
     map!.jumpTo({ center: point, zoom, pitch: 62, bearing: smooth });
     if (t < 1) animFrame = requestAnimationFrame(tick);
     else {
-      setSource('legs-static', paths.slice(0, clamped).map(legLineString));
+      setSource('legs-static', legFeatures(paths, props.journey!.stops).slice(0, clamped));
       setSource('leg-active', []);
       updateCard(clamped);
       emit('leg-complete');
@@ -471,12 +481,12 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
     // camera races starves the renderer and the line never shows.
     if (now - lastPaint > 80 || t === 1) {
       lastPaint = now;
-      setSource('leg-active', [legLineString(slicePath(path, eased))]);
+      setSource('leg-active', [legLineString(slicePath(path, eased), legColorProps(props.journey!.stops[clamped]))]);
     }
     placeCamera(point, smooth, eased);
     if (t < 1) animFrame = requestAnimationFrame(tick);
     else {
-      setSource('legs-static', paths.slice(0, clamped).map(legLineString));
+      setSource('legs-static', legFeatures(paths, props.journey!.stops).slice(0, clamped));
       setSource('leg-active', []);
       showStops(clamped); // arrival: the destination's label (only) returns
       updateCard(clamped);
@@ -564,7 +574,7 @@ onMounted(async () => {
         id,
         type: 'line',
         source: id,
-        paint: { 'line-color': '#A93226', 'line-width': LINE_WIDTH, 'line-dasharray': [2.2, 1.8] },
+        paint: { 'line-color': ['coalesce', ['get', 'color'], '#A93226'] as any, 'line-width': LINE_WIDTH, 'line-dasharray': [2.2, 1.8] },
         layout: { 'line-cap': 'round' },
       });
     }
@@ -576,7 +586,7 @@ onMounted(async () => {
       filter: ['==', ['get', 'current'], true],
       paint: {
         'circle-color': 'rgba(169, 50, 38, 0.16)',
-        'circle-stroke-color': '#A93226',
+        'circle-stroke-color': ['coalesce', ['get', 'color'], '#A93226'] as any,
         'circle-stroke-width': 1.5,
         'circle-stroke-opacity': 0.5,
         'circle-radius': HALO_RADIUS,
@@ -587,7 +597,7 @@ onMounted(async () => {
       type: 'circle',
       source: 'stops',
       paint: {
-        'circle-color': '#A93226',
+        'circle-color': ['coalesce', ['get', 'color'], '#A93226'] as any,
         'circle-stroke-color': '#F1E6C8',
         'circle-stroke-width': 2,
         'circle-radius': DOT_RADIUS,

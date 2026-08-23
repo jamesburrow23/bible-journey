@@ -138,10 +138,10 @@ export function pointAlong(path: LngLat[], t: number): { point: LngLat; bearing:
   return { point: path[path.length - 1], bearing: bearingOf(path[path.length - 2], path[path.length - 1]) };
 }
 
-export function legLineString(coords: LngLat[]): GeoJSON.Feature {
+export function legLineString(coords: LngLat[], properties: Record<string, unknown> = {}): GeoJSON.Feature {
   return {
     type: 'Feature',
-    properties: {},
+    properties,
     geometry: { type: 'LineString', coordinates: coords },
   };
 }

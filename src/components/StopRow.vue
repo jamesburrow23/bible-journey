@@ -33,6 +33,15 @@ function relookup(): void {
 }
 
 const badge = { gazetteer: '✓ gazetteer', model: '? model guess', manual: '✎ manual' } as const;
+
+// Trail colors: default route red plus story-follower alternates.
+const TRAIL_COLORS = ['#A93226', '#3E5C76', '#6B7A3A', '#6D4E7E', '#8C5A28', '#3E7268'] as const;
+
+function setColor(c: string): void {
+  // The default red is stored as "no color" so most stops stay untouched.
+  props.stop.color = c === TRAIL_COLORS[0] ? undefined : c;
+  emit('update');
+}
 </script>
 
 <template>
@@ -88,6 +97,17 @@ const badge = { gazetteer: '✓ gazetteer', model: '? model guess', manual: '✎
       </div>
       <input :value="stop.event" placeholder="What happens here (one sentence)" @input="stop.event = ($event.target as HTMLInputElement).value; emit('update')" />
       <input :value="stop.verseRef" placeholder="Gen 12:8" @input="stop.verseRef = ($event.target as HTMLInputElement).value; emit('update')" />
+      <div class="flex items-center gap-2">
+        <span class="text-xs" style="color: var(--muted)">Trail color</span>
+        <button
+          v-for="c in TRAIL_COLORS"
+          :key="c"
+          class="h-5 w-5 rounded-full border-2"
+          :style="`background: ${c}; border-color: ${(stop.color ?? TRAIL_COLORS[0]) === c ? 'var(--gold)' : 'transparent'}`"
+          :title="c === TRAIL_COLORS[0] ? 'Default' : `Color the dot and the leg arriving here ${c}`"
+          @click="setColor(c)"
+        />
+      </div>
       <div><button class="btn" @click="editing = false">Done</button></div>
     </div>
   </div>

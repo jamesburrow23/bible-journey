@@ -29,6 +29,8 @@ export interface Stop extends RawStop {
   photo?: { url: string; credit: string; creditUrl?: string };
   /** Whether verseRef appears among the place's known verse mentions. */
   verseOk?: boolean;
+  /** Trail color for this stop and the leg arriving at it (default route red). */
+  color?: string;
 }
 
 export interface Journey {
