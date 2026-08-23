@@ -62,6 +62,4 @@ export interface Settings {
   activeOverlay: string | null;
   /** Camera style: flat map, high chase flight, or ground-level hike. */
   viewMode: 'map' | 'flight' | 'hike';
-  /** Show 3D site miniatures on arrival (flight/hike modes). */
-  showMinis: boolean;
 }

@@ -14,7 +14,6 @@ const DEFAULTS: Settings = {
   showMapCard: true,
   activeOverlay: null,
   viewMode: 'map',
-  showMinis: true,
 };
 
 function load(): Settings {
