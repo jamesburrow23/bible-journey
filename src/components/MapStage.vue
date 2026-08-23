@@ -72,7 +72,7 @@ function clearAll(): void {
   labelMarkers = [];
   cardMarker?.remove();
   cardMarker = null;
-  if (ready) { setSource('legs-static', []); setSource('leg-active', []); setSource('stops', []); }
+  if (ready) { setSource('legs-static', []); setSource('leg-active', []); setSource('leg-preview', []); setSource('stops', []); }
 }
 
 function showStops(step: number): void {
@@ -294,6 +294,7 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   const staticCount = animate ? clamped - 1 : clamped;
   setSource('legs-static', paths.slice(0, Math.max(0, staticCount)).map(legLineString));
   setSource('leg-active', []);
+  setSource('leg-preview', []);
   showStops(clamped);
 
   const animating = animate && clamped > 0 && !reducedMotion;
@@ -397,6 +398,7 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
   const start = pointAlong(path, 0.001);
   let smooth = start.bearing;
   let altSmooth: number | null = null;
+  setSource('leg-preview', [legLineString(path)]); // the trail ahead, faint
   map!.easeTo({ center: path[0], zoom: 13.2, pitch: 80, bearing: smooth, duration: PREROLL - 100 });
   const begin = performance.now() + PREROLL;
 
@@ -504,6 +506,16 @@ onMounted(async () => {
         layout: { 'line-cap': 'round' },
       });
     }
+    // Faint preview of the leg ahead, shown while hiking so the trail is
+    // visible stretching toward the horizon before the solid line reaches it.
+    map!.addSource('leg-preview', { type: 'geojson', data: EMPTY });
+    map!.addLayer({
+      id: 'leg-preview',
+      type: 'line',
+      source: 'leg-preview',
+      paint: { 'line-color': '#A93226', 'line-width': LINE_WIDTH, 'line-dasharray': [2.2, 1.8], 'line-opacity': 0.35 },
+      layout: { 'line-cap': 'round' },
+    });
     map!.addSource('stops', { type: 'geojson', data: EMPTY });
     map!.addLayer({
       id: 'stop-halo',
@@ -537,16 +549,7 @@ onMounted(async () => {
       tileSize: 256,
       maxzoom: 13,
     });
-    // Parchment-tinted atmosphere so the flight horizon fades like an aged map.
-    map!.setSky({
-      'sky-color': '#d7d2bd',
-      'horizon-color': '#e8dbb7',
-      'fog-color': '#e3d8b8',
-      'sky-horizon-blend': 0.6,
-      'horizon-fog-blend': 0.7,
-      'fog-ground-blend': 0.5,
-      'atmosphere-blend': 0.8,
-    });
+    applySky();
     map!.addLayer(miniLayer as unknown as maplibregl.CustomLayerInterface);
     map!.on('zoom', syncLabelScale);
     syncLabelScale();
@@ -588,7 +591,35 @@ watch(() => settings.value.showMapCard, () => {
 
 watch(() => settings.value.activeOverlay, applyOverlay);
 
+function applySky(): void {
+  if (!map) return;
+  if (settings.value.viewMode === 'hike') {
+    // Blue sky at ground level — strong contrast against the ridge line.
+    map.setSky({
+      'sky-color': '#9dbfdd',
+      'horizon-color': '#dfe3d8',
+      'fog-color': '#e6dfc6',
+      'sky-horizon-blend': 0.7,
+      'horizon-fog-blend': 0.6,
+      'fog-ground-blend': 0.4,
+      'atmosphere-blend': 0.85,
+    });
+  } else {
+    // Parchment-tinted atmosphere so the flight horizon fades like an aged map.
+    map.setSky({
+      'sky-color': '#d7d2bd',
+      'horizon-color': '#e8dbb7',
+      'fog-color': '#e3d8b8',
+      'sky-horizon-blend': 0.6,
+      'horizon-fog-blend': 0.7,
+      'fog-ground-blend': 0.5,
+      'atmosphere-blend': 0.8,
+    });
+  }
+}
+
 function applyViewMode(animateCamera: boolean): void {
+  applySky();
   if (!map || !ready) return;
   const mode = settings.value.viewMode;
   if (mode === 'map') {
