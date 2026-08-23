@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import SidebarPanel from './components/SidebarPanel.vue';
 import SettingsPopover from './components/SettingsPopover.vue';
+import WelcomeModal from './components/WelcomeModal.vue';
 import MapStage from './components/MapStage.vue';
 import PresentationBar from './components/PresentationBar.vue';
 import { useJourneys } from './composables/useJourneys';
@@ -29,6 +30,13 @@ function onLegComplete(): void {
 
 const collapsed = ref(false);
 const settingsOpen = ref(false);
+// First-run guide: shown until dismissed once (or a key is already set).
+const welcomeOpen = ref(!localStorage.getItem('bj.welcomed') && !settings.value.geminiApiKey);
+function closeWelcome(openSettings: boolean): void {
+  localStorage.setItem('bj.welcomed', '1');
+  welcomeOpen.value = false;
+  if (openSettings) settingsOpen.value = true;
+}
 
 watch(() => activeJourney.value?.id, () => playback.reset());
 
@@ -43,6 +51,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       :collapsed="collapsed"
       @toggle-collapse="collapsed = !collapsed"
       @open-settings="settingsOpen = true"
+      @open-help="welcomeOpen = true"
     />
     <div class="flex min-w-0 flex-1 flex-col">
       <div class="min-h-0 flex-1">
@@ -58,5 +67,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       />
     </div>
     <SettingsPopover :open="settingsOpen" @close="settingsOpen = false" />
+    <WelcomeModal :open="welcomeOpen" @close="closeWelcome(false)" @open-settings="closeWelcome(true)" />
   </div>
 </template>

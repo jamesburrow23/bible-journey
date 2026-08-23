@@ -4,7 +4,7 @@ import StopsSection from './StopsSection.vue';
 import LibrarySection from './LibrarySection.vue';
 
 defineProps<{ collapsed: boolean }>();
-const emit = defineEmits<{ 'toggle-collapse': []; 'open-settings': [] }>();
+const emit = defineEmits<{ 'toggle-collapse': []; 'open-settings': []; 'open-help': [] }>();
 </script>
 
 <template>
@@ -16,6 +16,7 @@ const emit = defineEmits<{ 'toggle-collapse': []; 'open-settings': [] }>();
     <div class="flex items-center justify-between border-b px-4 py-4" style="border-color: var(--line)">
       <h1 class="font-fell-sc text-[22px]">Bible Journeys</h1>
       <span class="flex gap-3">
+        <button title="Getting started guide" style="color: var(--muted)" @click="emit('open-help')">?</button>
         <button title="Settings" style="color: var(--muted)" @click="emit('open-settings')">⚙</button>
         <button title="Collapse sidebar (presentation mode)" style="color: var(--muted)" @click="emit('toggle-collapse')">‹</button>
       </span>
