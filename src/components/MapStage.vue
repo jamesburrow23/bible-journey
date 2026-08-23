@@ -395,7 +395,7 @@ function runFlight(path: LngLat[], paths: LngLat[][], clamped: number): void {
  */
 function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
   const lenDeg = pathLength(path);
-  const durationMs = Math.min(45000, Math.max(9000, 4000 + lenDeg * 111 * 160));
+  const durationMs = Math.min(25000, Math.max(7000, 3000 + lenDeg * 111 * 70));
   const PREROLL = 1700;
   const start = pointAlong(path, 0.001);
   let smooth = start.bearing;
@@ -408,7 +408,9 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
 
   const placeCamera = (cur: LngLat, bearingDeg: number, frac: number): void => {
     const rad = (bearingDeg * Math.PI) / 180;
-    const backDeg = 420 / 111000; // camera ~420m behind the traveler
+    // Far enough behind that the painted line's tip sits visibly ahead
+    // in the lower-middle of the frame while it draws.
+    const backDeg = 900 / 111000;
     const back: LngLat = [
       cur[0] - (Math.sin(rad) * backDeg) / Math.cos((cur[1] * Math.PI) / 180),
       cur[1] - Math.cos(rad) * backDeg,
@@ -420,13 +422,13 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
     );
     altSmooth = altSmooth === null ? ground : altSmooth + (ground - altSmooth) * 0.06;
     // Look farther ahead and higher, so the view rides the horizon.
-    const ahead = pointAlong(path, Math.min(1, frac + 0.12)).point;
+    const ahead = pointAlong(path, Math.min(1, frac + 0.15)).point;
     const aheadElev = map!.queryTerrainElevation({ lng: ahead[0], lat: ahead[1] }) ?? 0;
     const camOpts = map!.calculateCameraOptionsFromTo(
       new maplibregl.LngLat(back[0], back[1]),
-      altSmooth + 150,
+      altSmooth + 120,
       new maplibregl.LngLat(ahead[0], ahead[1]),
-      aheadElev + 140,
+      aheadElev + 150,
     );
     map!.jumpTo(camOpts);
   };
@@ -482,7 +484,7 @@ onMounted(async () => {
     style,
     center: [35.2, 31.6],
     zoom: 5.5,
-    maxPitch: 85,
+    maxPitch: 88,
     attributionControl: { compact: true, customAttribution: 'Region data © <a href="https://www.openbible.info/geo/">OpenBible.info</a> (CC-BY 4.0) · Terrain © <a href="https://registry.opendata.aws/terrain-tiles/">Mapzen/AWS</a>' },
   });
   map.on('load', () => {
