@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { legPathsFromStops, slicePath, legLineString, pathLength, pointAlong, type LngLat } from '../src/services/route';
+import { legPathsFromStops, slicePath, legLineString, pathLength, pointAlong, sanitizeVia, type LngLat } from '../src/services/route';
 import type { Stop, Waypoint } from '../src/types';
 
 const stop = (name: string, lat: number, lng: number, via?: Waypoint[]): Stop => ({
@@ -58,6 +58,39 @@ describe('legPathsFromStops', () => {
     expect(hits.length).toBeGreaterThan(0); // spline passes exactly through the waypoint
     expect(paths[0][0]).toEqual([39.0, 36.9]);
     expect(paths[0][paths[0].length - 1]).toEqual([35.3, 32.2]);
+  });
+});
+
+describe('spline stays tame (centripetal)', () => {
+  it('does not overshoot far beyond its anchors, even with clustered waypoints', () => {
+    const via = [{ lat: 0.1, lng: 4.9 }, { lat: 0.12, lng: 5.0 }, { lat: 3, lng: 5.1 }];
+    const [path] = legPathsFromStops([stop('a', 0, 0), stop('b', 0, 10, via)]);
+    const lats = path.map((p) => p[1]);
+    const lngs = path.map((p) => p[0]);
+    expect(Math.max(...lats)).toBeLessThan(4); // anchor max lat 3 + small margin
+    expect(Math.min(...lats)).toBeGreaterThan(-1);
+    expect(Math.min(...lngs)).toBeGreaterThan(-1);
+    expect(Math.max(...lngs)).toBeLessThan(11);
+  });
+});
+
+describe('sanitizeVia', () => {
+  const from = { lat: 0, lng: 0 };
+  const to = { lat: 0, lng: 10 };
+  it('keeps waypoints that progress cleanly toward the destination', () => {
+    const via = [{ lat: 1, lng: 3 }, { lat: -1, lng: 7 }];
+    expect(sanitizeVia(from, to, via)).toEqual(via);
+  });
+  it('drops backtracking waypoints', () => {
+    expect(sanitizeVia(from, to, [{ lat: 0.5, lng: 6 }, { lat: 0.5, lng: 3 }])).toEqual([{ lat: 0.5, lng: 6 }]);
+  });
+  it('drops wild detours and points beyond the endpoints', () => {
+    expect(sanitizeVia(from, to, [{ lat: 8, lng: 5 }])).toEqual([]); // 80% of chord off-axis
+    expect(sanitizeVia(from, to, [{ lat: 0, lng: 12 }])).toEqual([]); // past the destination
+    expect(sanitizeVia(from, to, [{ lat: 0, lng: -2 }])).toEqual([]); // behind the start
+  });
+  it('returns empty for a zero-length chord', () => {
+    expect(sanitizeVia(from, from, [{ lat: 1, lng: 1 }])).toEqual([]);
   });
 });
 

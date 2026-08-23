@@ -58,8 +58,6 @@ export interface Settings {
   playMs: number;
   /** Show the parchment info card on the map at the current stop. */
   showMapCard: boolean;
-  /** Active historical overlay preset id, or null for none. */
-  activeOverlay: string | null;
   /** Camera style: flat map, high chase flight, or ground-level hike. */
   viewMode: 'map' | 'flight' | 'hike';
 }

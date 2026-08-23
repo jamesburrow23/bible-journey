@@ -50,13 +50,10 @@ backend, and your journeys live in your browser's local storage.
   a corner ledger that reveals each named color as it appears, chapter
   breaks for scene jumps with no travel line, stop duplication for return
   visits, and editable everything (names, coordinates, verses, blurbs).
-- **Historical overlays** — a Divided Kingdom (~930–722 BC) preset with
-  Israel, Judah, and their neighbors, derived from OpenBible.info region
-  contours; the overlay system is data-driven and extensible.
 - **Library + export** — journeys autosave locally; export/import as JSON to
   back up or share, with every curve, color, and label preserved.
 - **Presentation controls** — adjustable line-draw, camera, and auto-play
-  speeds; toggles for the card and overlays; keyboard stepping that ignores
+  speeds; a toggle for the card; keyboard stepping that ignores
   typing in inputs.
 
 ## Running locally
@@ -85,7 +82,7 @@ the browser.
 
 ## Data credits
 
-- Place data, verse indexes, region contours, and site-photo references from
+- Place data, verse indexes, and site-photo references from
   [OpenBible.info Bible Geocoding Data](https://github.com/openbibleinfo/Bible-Geocoding-Data)
   (CC-BY 4.0, Stephen Smith / OpenBible.info).
 - Basemap tiles by [OpenFreeMap](https://openfreemap.org) © OpenStreetMap
@@ -93,9 +90,6 @@ the browser.
 - Terrain elevation from [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/)
   (Mapzen terrarium).
 - Site photos hotlinked from Wikimedia Commons, credited per photo in-app.
-- The Israel/Judah kingdom outlines and all historical boundaries are
-  traditional scholarly approximations — ancient borders were zones, not
-  lines.
 
 ## A note on accuracy
 

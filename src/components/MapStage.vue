@@ -7,7 +7,6 @@ import { legPathsFromStops, slicePath, legLineString, pathLength, pointAlong, ty
 import { useSettings } from '../composables/useSettings';
 import { useJourneys } from '../composables/useJourneys';
 import { routeEditing } from '../composables/useUiState';
-import { OVERLAYS } from '../overlays';
 
 const props = defineProps<{ journey: Journey | null; stepIndex: number }>();
 const emit = defineEmits<{ 'leg-complete': [] }>();
@@ -36,7 +35,6 @@ let labelMarkers: maplibregl.Marker[] = [];
 let cardMarker: maplibregl.Marker | null = null;
 const cardEl = document.createElement('div');
 cardEl.className = 'bj-card';
-let regionMarkers: maplibregl.Marker[] = [];
 let ready = false;
 let animFrame = 0;
 let suppressNextStepCamera = false;
@@ -53,11 +51,6 @@ const legendEntries = computed(() => {
     if (!seen.includes(c)) seen.push(c);
   }
   return seen.filter((c) => labels[c]?.trim()).map((c) => ({ color: c, label: labels[c] }));
-});
-
-const overlayModel = computed({
-  get: () => settings.value.activeOverlay ?? '',
-  set: (v: string) => { settings.value.activeOverlay = v || null; },
 });
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -157,29 +150,22 @@ function updateCard(step: number): void {
   }
 }
 
-function applyOverlay(): void {
-  if (!map || !ready) return;
-  const preset = OVERLAYS.find((o) => o.id === settings.value.activeOverlay);
-  setSource('overlay', preset?.regions ?? []);
-  regionMarkers.forEach((m) => m.remove());
-  regionMarkers = [];
-  for (const r of preset?.regions ?? []) {
-    const props = r.properties as any;
-    const el = document.createElement('div');
-    el.className = 'bj-region-label';
-    el.textContent = props.name;
-    el.style.color = props.stroke;
-    regionMarkers.push(
-      new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(props.labelAt).addTo(map!),
-    );
-  }
-}
-
 // ---------- Route editing (drag the curve) ----------
 let handleMarkers: maplibregl.Marker[] = [];
 
 function viaOf(i: number): { lat: number; lng: number }[] {
   return props.journey?.stops[i].via ?? [];
+}
+
+/** Handles get a generous invisible hit area around a small visual. */
+function makeHandleEl(visualClass: string, title: string): HTMLElement {
+  const hit = document.createElement('div');
+  hit.className = 'bj-hit';
+  hit.title = title;
+  const visual = document.createElement('span');
+  visual.className = visualClass;
+  hit.appendChild(visual);
+  return hit;
 }
 
 /** Leg features carrying each leg's trail color (from its arrival stop). */
@@ -221,9 +207,7 @@ function rebuildHandles(): void {
 
   // Draggable handle on every STOP: reposition the destination itself.
   stops.forEach((stop, i) => {
-    const el = document.createElement('div');
-    el.className = 'bj-handle bj-handle-stop';
-    el.title = `Drag to move ${stop.name || 'this stop'}`;
+    const el = makeHandleEl('bj-handle bj-handle-stop', `Drag to move ${stop.name || 'this stop'}`);
     const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([stop.lng, stop.lat]).addTo(map!);
     m.on('drag', () => {
       const p = m.getLngLat();
@@ -245,9 +229,7 @@ function rebuildHandles(): void {
     const segCount = via.length + 1; // anchors: prev stop, ...via, stop
     // Draggable handle per existing waypoint; double-click removes it.
     via.forEach((w, vi) => {
-      const el = document.createElement('div');
-      el.className = 'bj-handle';
-      el.title = 'Drag to bend the route · double-click to remove';
+      const el = makeHandleEl('bj-handle', 'Drag to bend the route · double-click to remove');
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([w.lng, w.lat]).addTo(map!);
       m.on('drag', () => {
         const p = m.getLngLat();
@@ -268,9 +250,7 @@ function rebuildHandles(): void {
     // ghosts — so the path subdivides as finely as needed.
     for (let s = 0; s < segCount; s++) {
       const mid = pointAlong(paths[i - 1], (s + 0.5) / segCount).point;
-      const el = document.createElement('div');
-      el.className = 'bj-handle bj-handle-ghost';
-      el.title = 'Drag to add a bend here';
+      const el = makeHandleEl('bj-handle bj-handle-ghost', 'Drag to add a bend here');
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(mid).addTo(map!);
       const insertAt = s; // segment s sits before via[s]
       m.on('drag', () => {
@@ -528,8 +508,6 @@ onMounted(async () => {
     attributionControl: { compact: true, customAttribution: 'Region data © <a href="https://www.openbible.info/geo/">OpenBible.info</a> (CC-BY 4.0) · Terrain © <a href="https://registry.opendata.aws/terrain-tiles/">Mapzen/AWS</a>' },
   });
   map.on('load', () => {
-    // Overlay layers slot in BENEATH the basemap's water so seas and lakes
-    // clip the historical regions — a border can never trace over water.
     const waterId = map!.getStyle().layers?.find((l: any) => l.type === 'fill' && /water/i.test(l.id))?.id;
     // Shaded relief from a dedicated DEM source (sharing the terrain's
     // raster-dem source with a hillshade layer causes artifacts). Sits under
@@ -551,19 +529,6 @@ onMounted(async () => {
         'hillshade-highlight-color': '#fdf6e0',
         'hillshade-accent-color': '#857249',
       },
-    }, waterId);
-    map!.addSource('overlay', { type: 'geojson', data: EMPTY });
-    map!.addLayer({
-      id: 'overlay-fill',
-      type: 'fill',
-      source: 'overlay',
-      paint: { 'fill-color': ['get', 'fill'], 'fill-opacity': ['get', 'opacity'] },
-    }, waterId);
-    map!.addLayer({
-      id: 'overlay-outline',
-      type: 'line',
-      source: 'overlay',
-      paint: { 'line-color': ['get', 'stroke'], 'line-width': 1.4, 'line-dasharray': [3, 2.5], 'line-opacity': 0.7 },
     }, waterId);
     for (const id of ['legs-static', 'leg-active']) {
       map!.addSource(id, { type: 'geojson', data: EMPTY });
@@ -612,7 +577,6 @@ onMounted(async () => {
     map!.on('zoom', syncLabelScale);
     syncLabelScale();
     ready = true;
-    applyOverlay();
     applyViewMode(false);
     if (props.journey) { fitJourney(); renderStep(props.stepIndex, false, false); }
   });
@@ -646,8 +610,6 @@ watch(() => settings.value.showMapCard, () => {
   updateCard(currentStep());
   showStops(currentStep()); // restore/remove the current stop's label to match
 });
-
-watch(() => settings.value.activeOverlay, applyOverlay);
 
 function applySky(): void {
   if (!map) return;
@@ -703,12 +665,6 @@ watch(() => settings.value.viewMode, () => {
 <template>
   <div class="relative h-full w-full">
     <div ref="container" class="h-full w-full" />
-    <div class="absolute right-3 top-3 z-10">
-      <select v-model="overlayModel" class="bj-overlay-select" title="Historical overlay">
-        <option value="">No overlay</option>
-        <option v-for="o in OVERLAYS" :key="o.id" :value="o.id">{{ o.name }}</option>
-      </select>
-    </div>
     <div
       v-if="mapError"
       class="absolute inset-0 flex items-center justify-center p-8 text-center"
@@ -755,33 +711,19 @@ watch(() => settings.value.viewMode, () => {
   white-space: nowrap;
   pointer-events: none;
 }
-.bj-region-label {
-  font-family: 'IM Fell English SC', serif;
-  font-size: 15px;
-  letter-spacing: 0.35em;
-  text-transform: uppercase;
-  opacity: 0.85;
-  text-shadow: 0 0 3px var(--parchment), 0 0 6px var(--parchment), 0 0 9px var(--parchment);
-  white-space: nowrap;
-  pointer-events: none;
+.bj-hit {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: grab;
 }
-.bj-overlay-select {
-  background: var(--panel);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-family: 'Alegreya Sans', sans-serif;
-  font-size: 13px;
-}
-.bj-overlay-select:focus-visible { outline: 2px solid var(--gold); }
+.bj-hit:active { cursor: grabbing; }
 .bj-handle {
+  display: block;
   width: 13px; height: 13px; border-radius: 3px;
   background: #f1e6c8; border: 2px solid var(--route);
   box-shadow: 0 1px 4px rgba(40, 30, 10, 0.4);
-  cursor: grab;
+  pointer-events: none;
 }
-.bj-handle:active { cursor: grabbing; }
 .bj-handle-ghost {
   border-radius: 50%;
   background: rgba(241, 230, 200, 0.55);

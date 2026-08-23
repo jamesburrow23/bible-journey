@@ -1,5 +1,6 @@
 import type { RawStop, Stop } from '../types';
 import { refMatchesPlace } from './verses';
+import { sanitizeVia } from './route';
 import data from '../assets/gazetteer.json';
 
 // Bundled distillation of OpenBible.info Bible Geocoding Data (CC-BY 4.0):
@@ -66,7 +67,7 @@ export function lookupPlace(name: string, near?: { lat: number; lng: number }): 
  * Unmatched places keep the model's coordinates (flagged 'model').
  */
 export function applyGazetteer(raw: RawStop[]): Stop[] {
-  return raw.map((r) => {
+  const stops: Stop[] = raw.map((r) => {
     const hit = lookupPlace(r.name, { lat: r.lat, lng: r.lng });
     const verseOk = hit ? refMatchesPlace(hit.verses, r.verseRef) : null;
     // Confidence 0 means the dataset has NO modern identification — its
@@ -95,4 +96,10 @@ export function applyGazetteer(raw: RawStop[]): Stop[] {
       ...(verseOk === null ? {} : { verseOk }),
     };
   });
+  // Model routes zigzag sometimes — keep only waypoints that progress
+  // cleanly toward each destination (grounded coordinates, so post-override).
+  for (let i = 0; i < stops.length; i++) {
+    stops[i].via = i === 0 ? [] : sanitizeVia(stops[i - 1], stops[i], stops[i].via ?? []);
+  }
+  return stops;
 }

@@ -12,7 +12,6 @@ const DEFAULTS: Settings = {
   cameraMs: 800,
   playMs: 1600,
   showMapCard: true,
-  activeOverlay: null,
   viewMode: 'map',
 };
 

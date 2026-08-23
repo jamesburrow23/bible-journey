@@ -1,8 +1,8 @@
-import type { Stop } from '../types';
+import type { Stop, Waypoint } from '../types';
 
 export type LngLat = [number, number];
 
-const ARC_CURVATURE = 0.12;
+const ARC_CURVATURE = 0.045; // nearly straight by default
 const ARC_SAMPLES = 16;
 const SPLINE_SAMPLES = 8;
 
@@ -28,24 +28,72 @@ function quadArc(a: LngLat, b: LngLat, side: 1 | -1): LngLat[] {
   return pts;
 }
 
-/** Smooth Catmull-Rom spline that passes exactly through every anchor. */
+/**
+ * Centripetal Catmull-Rom spline through every anchor. Unlike the uniform
+ * variant, centripetal parameterization never loops or overshoots between
+ * unevenly spaced anchors — dragged or model-generated waypoints stay tame.
+ */
 function catmullRom(anchors: LngLat[]): LngLat[] {
   const P = [anchors[0], ...anchors, anchors[anchors.length - 1]];
   const pts: LngLat[] = [anchors[0]];
+  const EPS = 1e-9;
+  const knot = (a: LngLat, b: LngLat): number => Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])) || EPS;
   for (let i = 1; i < P.length - 2; i++) {
     const [p0, p1, p2, p3] = [P[i - 1], P[i], P[i + 1], P[i + 2]];
+    const d01 = knot(p0, p1);
+    const d12 = knot(p1, p2);
+    const d23 = knot(p2, p3);
+    // Centripetal tangents at p1 and p2.
+    const tan = (a: LngLat, b: LngLat, c: LngLat, dab: number, dbc: number, k: 0 | 1): number =>
+      ((b[k] - a[k]) / dab - (c[k] - a[k]) / (dab + dbc) + (c[k] - b[k]) / dbc) * dbc;
+    const t1: LngLat = [tan(p0, p1, p2, d01, d12, 0), tan(p0, p1, p2, d01, d12, 1)];
+    const t2: LngLat = [tan(p1, p2, p3, d12, d23, 0), tan(p1, p2, p3, d12, d23, 1)];
     for (let j = 1; j < SPLINE_SAMPLES; j++) {
       const t = j / SPLINE_SAMPLES;
-      const t2 = t * t;
-      const t3 = t2 * t;
+      const tt = t * t;
+      const ttt = tt * t;
+      const h00 = 2 * ttt - 3 * tt + 1;
+      const h10 = ttt - 2 * tt + t;
+      const h01 = -2 * ttt + 3 * tt;
+      const h11 = ttt - tt;
       pts.push([
-        0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
-        0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+        h00 * p1[0] + h10 * t1[0] + h01 * p2[0] + h11 * t2[0],
+        h00 * p1[1] + h10 * t1[1] + h01 * p2[1] + h11 * t2[1],
       ]);
     }
     pts.push([p2[0], p2[1]]); // land exactly on each anchor, no float drift
   }
   return pts;
+}
+
+/**
+ * Keep only waypoints that make steady progress from `from` to `to` without
+ * wild detours: each must project further along the straight chord than the
+ * last (strictly between the endpoints) and sit within 35% of the chord's
+ * length from it. Applied to model-generated routes at extraction time —
+ * hand-dragged bends are never filtered.
+ */
+export function sanitizeVia(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+  via: Waypoint[],
+): Waypoint[] {
+  const dx = to.lng - from.lng;
+  const dy = to.lat - from.lat;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return [];
+  const len = Math.sqrt(len2);
+  const out: Waypoint[] = [];
+  let lastT = 0;
+  for (const w of via) {
+    const t = ((w.lng - from.lng) * dx + (w.lat - from.lat) * dy) / len2;
+    const perp = Math.abs((w.lng - from.lng) * dy - (w.lat - from.lat) * dx) / len;
+    if (t <= lastT || t >= 1) continue; // backtracking or beyond the endpoints
+    if (perp > 0.35 * len) continue; // wild detour
+    out.push(w);
+    lastT = t;
+  }
+  return out;
 }
 
 /**
