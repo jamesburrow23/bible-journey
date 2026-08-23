@@ -69,14 +69,20 @@ export function applyGazetteer(raw: RawStop[]): Stop[] {
   return raw.map((r) => {
     const hit = lookupPlace(r.name, { lat: r.lat, lng: r.lng });
     const verseOk = hit ? refMatchesPlace(hit.verses, r.verseRef) : null;
+    // Confidence 0 means the dataset has NO modern identification — its
+    // coordinate is a fallback point (often a centroid between competing
+    // traditions, e.g. Mount Horeb). For those, the model's search-grounded
+    // guess is better; use the fallback only when the model gave nothing.
+    const modelCoordsUsable = Number.isFinite(r.lat) && Number.isFinite(r.lng) && !(r.lat === 0 && r.lng === 0);
+    const useHitCoords = !!hit && (hit.confidence > 0 || !modelCoordsUsable);
     return {
       ...r,
       id: crypto.randomUUID(),
-      lat: hit ? hit.lat : r.lat,
-      lng: hit ? hit.lng : r.lng,
+      lat: useHitCoords ? hit!.lat : r.lat,
+      lng: useHitCoords ? hit!.lng : r.lng,
       modernHint: r.modernHint || hit?.modern || '',
-      coordSource: hit ? 'gazetteer' : 'model',
-      ...(hit ? { confidence: hit.confidence } : {}),
+      coordSource: useHitCoords ? 'gazetteer' : 'model',
+      ...(useHitCoords ? { confidence: hit!.confidence } : {}),
       ...(hit?.photo ? { photo: hit.photo } : {}),
       ...(verseOk === null ? {} : { verseOk }),
     };

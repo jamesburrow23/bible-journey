@@ -52,6 +52,18 @@ describe('applyGazetteer', () => {
     const [s] = applyGazetteer([raw('Bethel', 31.9, 35.2, 'Gen 40:1')]);
     expect(s.verseOk).toBe(false);
   });
+  it('keeps the model\'s grounded coords when the dataset has no identification (confidence 0)', () => {
+    // Horeb's location is disputed; the dataset's point is a fallback centroid.
+    const [s] = applyGazetteer([raw('Mount Horeb', 28.54, 33.97, 'Exod 3:1')]);
+    expect(s.coordSource).toBe('model');
+    expect(s.lat).toBeCloseTo(28.54);
+    expect(s.verseOk).toBe(true); // verse knowledge still applies to the name
+  });
+  it('uses the dataset fallback point when the model gave no usable coords', () => {
+    const [s] = applyGazetteer([raw('Mount Horeb', 0, 0, 'Exod 3:1')]);
+    expect(s.coordSource).toBe('gazetteer');
+    expect(s.lat).toBeCloseTo(29.67, 1);
+  });
   it('keeps model coords for unknown places', () => {
     const [s] = applyGazetteer([raw('Narnia', 12.3, 45.6)]);
     expect(s.coordSource).toBe('model');
