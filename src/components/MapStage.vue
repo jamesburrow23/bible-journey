@@ -98,15 +98,27 @@ function showStops(step: number): void {
 }
 
 /** Show the current stop's miniature (flight/hike only), or hide it. */
+let miniToken = 0;
 function updateMini(step: number): void {
   if (!map || !ready) return;
   const s: Stop | undefined = props.journey?.stops[step];
   if (!s || settings.value.viewMode === 'map' || routeEditing.value) {
+    miniToken++;
     miniLayer.hide();
     return;
   }
-  const alt = map.queryTerrainElevation({ lng: s.lng, lat: s.lat }) ?? 0;
-  miniLayer.show({ lng: s.lng, lat: s.lat }, alt, s.siteType ?? 'village');
+  const place = { lng: s.lng, lat: s.lat };
+  const LIFT = 6; // small lift so sloped ground doesn't clip the base
+  const token = ++miniToken;
+  miniLayer.show(place, (map.queryTerrainElevation(place) ?? 0) + LIFT, s.siteType ?? 'village');
+  // DEM tiles may not be loaded yet (mode just toggled, fresh area) — the
+  // elevation query returns null/stale then, sinking the model into the
+  // terrain. Re-seat once the map settles.
+  map.once('idle', () => {
+    if (token !== miniToken || !map) return;
+    const fresh = map.queryTerrainElevation(place);
+    if (fresh != null) miniLayer.setAltitude(fresh + LIFT);
+  });
 }
 
 function updateCard(step: number): void {

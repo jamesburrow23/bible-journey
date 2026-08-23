@@ -10,8 +10,8 @@ export const SITE_TYPES: SiteType[] = ['city', 'village', 'palace', 'temple', 'm
 
 /** Model footprint in meters, per type. */
 export const MINI_SIZE: Record<SiteType, number> = {
-  city: 520, village: 300, palace: 380, temple: 380,
-  mountain: 950, wilderness: 320, water: 360, camp: 300,
+  city: 850, village: 520, palace: 650, temple: 650,
+  mountain: 1500, wilderness: 520, water: 600, camp: 500,
 };
 
 const C = {

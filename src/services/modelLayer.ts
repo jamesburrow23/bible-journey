@@ -39,13 +39,26 @@ export class MiniModelLayer {
     this.renderer?.dispose();
   }
 
+  private lngLat: { lng: number; lat: number } | null = null;
+  private sizeMeters = 0;
+
   show(lngLat: { lng: number; lat: number }, altitude: number, type: SiteType): void {
     if (this.group) this.scene.remove(this.group);
     this.group = buildMini(type);
     this.scene.add(this.group);
+    this.lngLat = lngLat;
+    this.sizeMeters = MINI_SIZE[type];
     this.merc = maplibregl.MercatorCoordinate.fromLngLat(lngLat, altitude);
-    this.meterScale = this.merc.meterInMercatorCoordinateUnits() * MINI_SIZE[type];
+    this.meterScale = this.merc.meterInMercatorCoordinateUnits() * this.sizeMeters;
     this.popStart = performance.now();
+    this.map?.triggerRepaint();
+  }
+
+  /** Re-seat the model once terrain tiles have loaded and the true (exaggerated) elevation is known. */
+  setAltitude(altitude: number): void {
+    if (!this.lngLat || !this.group) return;
+    this.merc = maplibregl.MercatorCoordinate.fromLngLat(this.lngLat, altitude);
+    this.meterScale = this.merc.meterInMercatorCoordinateUnits() * this.sizeMeters;
     this.map?.triggerRepaint();
   }
 
