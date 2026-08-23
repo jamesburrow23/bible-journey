@@ -40,6 +40,8 @@ export interface Journey {
   name: string;
   passageText: string;
   stops: Stop[];
+  /** Trail-color legend labels, hex → name (e.g. "#6B7A3A" → "Elijah"). */
+  colorLabels?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }

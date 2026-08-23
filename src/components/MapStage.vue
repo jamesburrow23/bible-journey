@@ -43,6 +43,20 @@ let ready = false;
 let animFrame = 0;
 let suppressNextStepCamera = false;
 
+/** Corner ledger: labeled trail colors, shown only once visible on the map. */
+const legendEntries = computed(() => {
+  const j = props.journey;
+  if (!j) return [];
+  const labels = j.colorLabels ?? {};
+  const upto = routeEditing.value ? j.stops.length : currentStep() + 1;
+  const seen: string[] = [];
+  for (const s of j.stops.slice(0, upto)) {
+    const c = s.color ?? '#A93226';
+    if (!seen.includes(c)) seen.push(c);
+  }
+  return seen.filter((c) => labels[c]?.trim()).map((c) => ({ color: c, label: labels[c] }));
+});
+
 const overlayModel = computed({
   get: () => settings.value.activeOverlay ?? '',
   set: (v: string) => { settings.value.activeOverlay = v || null; },
@@ -732,6 +746,12 @@ watch(() => settings.value.showMinis, () => updateMini(currentStep()));
     >
       {{ mapError }}
     </div>
+    <div v-if="legendEntries.length" class="bj-ledger">
+      <div v-for="e in legendEntries" :key="e.color" class="flex items-center gap-2">
+        <span class="bj-ledger-line" :style="`background: ${e.color}`" />
+        <span>{{ e.label }}</span>
+      </div>
+    </div>
     <div
       v-if="lightbox"
       class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 p-8"
@@ -802,6 +822,32 @@ watch(() => settings.value.showMinis, () => updateMini(currentStep()));
   width: 17px; height: 17px; border-radius: 50%;
   background: var(--route); border: 3px solid #f1e6c8;
   box-shadow: 0 0 0 1.5px var(--gold), 0 1px 5px rgba(40, 30, 10, 0.45);
+}
+.bj-ledger {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: linear-gradient(160deg, #f0e5c8, #e4d5af);
+  border: 1px solid #b09a68;
+  outline: 1px solid rgba(176, 154, 104, 0.55);
+  outline-offset: -4px;
+  box-shadow: 2px 3px 10px rgba(40, 30, 10, 0.3);
+  padding: 9px 13px;
+  font-family: 'IM Fell English', serif;
+  font-size: 16px;
+  color: #4a3b22;
+  pointer-events: none;
+}
+.bj-ledger-line {
+  display: inline-block;
+  width: 26px;
+  height: 4px;
+  border-radius: 2px;
+  flex: none;
 }
 .bj-card {
   max-width: 310px;
