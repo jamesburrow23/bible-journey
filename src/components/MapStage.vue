@@ -196,8 +196,11 @@ function viaOf(i: number): { lat: number; lng: number }[] {
 }
 
 /** Leg features carrying each leg's trail color (from its arrival stop). */
-function legFeatures(paths: LngLat[][], stops: Stop[]): GeoJSON.Feature[] {
-  return paths.map((p, i) => legLineString(p, stops[i + 1]?.color ? { color: stops[i + 1].color } : {}));
+function legFeatures(paths: LngLat[][], stops: Stop[], count?: number): GeoJSON.Feature[] {
+  return paths
+    .slice(0, count ?? paths.length)
+    .map((p, i) => legLineString(p, stops[i + 1]?.color ? { color: stops[i + 1].color } : {}))
+    .filter((f) => (f.geometry as GeoJSON.LineString).coordinates.length >= 2); // broken legs draw nothing
 }
 
 function legColorProps(stop: Stop | undefined): Record<string, unknown> {
@@ -250,6 +253,7 @@ function rebuildHandles(): void {
   });
 
   for (let i = 1; i < stops.length; i++) {
+    if (!paths[i - 1].length) continue; // scene cut: nothing to bend
     const via = viaOf(i);
     const segCount = via.length + 1; // anchors: prev stop, ...via, stop
     // Draggable handle per existing waypoint; double-click removes it.
@@ -326,11 +330,12 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   const paths = legPathsFromStops(stops);
   const clamped = Math.min(step, stops.length - 1);
   const staticCount = animate ? clamped - 1 : clamped;
-  setSource('legs-static', legFeatures(paths, stops).slice(0, Math.max(0, staticCount)));
+  setSource('legs-static', legFeatures(paths, stops, Math.max(0, staticCount)));
   setSource('leg-active', []);
   showStops(clamped);
 
-  const animating = animate && clamped > 0 && !reducedMotion;
+  const broken = clamped > 0 && paths[clamped - 1].length === 0;
+  const animating = animate && clamped > 0 && !reducedMotion && !broken;
   // The card lands with the traveler: hidden while the leg is drawing.
   if (animating) updateCard(-1);
   else updateCard(clamped);
@@ -354,7 +359,7 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
       setSource('leg-active', [legLineString(slicePath(path, eased), legColorProps(props.journey!.stops[clamped]))]);
       if (t < 1) animFrame = requestAnimationFrame(tick);
       else {
-        setSource('legs-static', legFeatures(paths, props.journey!.stops).slice(0, clamped));
+        setSource('legs-static', legFeatures(paths, props.journey!.stops, clamped));
         setSource('leg-active', []);
         updateCard(clamped);
         emit('leg-complete');
@@ -362,7 +367,7 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
     };
     animFrame = requestAnimationFrame(tick);
   } else if (animate && clamped > 0) {
-    setSource('legs-static', legFeatures(paths, props.journey!.stops).slice(0, clamped));
+    setSource('legs-static', legFeatures(paths, props.journey!.stops, clamped));
   }
 
   // Camera
@@ -377,6 +382,9 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
       map.easeTo({ center: [s.lng, s.lat], zoom: 13.2, pitch: 84, duration });
     } else if (clamped === 0) {
       map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration });
+    } else if (broken) {
+      const s = stops[clamped];
+      map.easeTo({ center: [s.lng, s.lat], zoom: Math.max(map.getZoom(), 6), duration });
     } else {
       const path = paths[clamped - 1];
       const b = new maplibregl.LngLatBounds(path[0], path[0]);
@@ -384,6 +392,8 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
       map.fitBounds(b, { padding: 120, duration, maxZoom: 9 });
     }
   }
+  // A forward step over a scene cut still completes a "leg" for auto-play.
+  if (animate && broken) emit('leg-complete');
 }
 
 /**
@@ -410,7 +420,7 @@ function runFlight(path: LngLat[], paths: LngLat[][], clamped: number): void {
     map!.jumpTo({ center: point, zoom, pitch: 62, bearing: smooth });
     if (t < 1) animFrame = requestAnimationFrame(tick);
     else {
-      setSource('legs-static', legFeatures(paths, props.journey!.stops).slice(0, clamped));
+      setSource('legs-static', legFeatures(paths, props.journey!.stops, clamped));
       setSource('leg-active', []);
       updateCard(clamped);
       emit('leg-complete');
@@ -486,7 +496,7 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
     placeCamera(point, smooth, eased);
     if (t < 1) animFrame = requestAnimationFrame(tick);
     else {
-      setSource('legs-static', legFeatures(paths, props.journey!.stops).slice(0, clamped));
+      setSource('legs-static', legFeatures(paths, props.journey!.stops, clamped));
       setSource('leg-active', []);
       showStops(clamped); // arrival: the destination's label (only) returns
       updateCard(clamped);

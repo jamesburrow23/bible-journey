@@ -18,6 +18,8 @@ export interface RawStop {
   legMode?: 'land' | 'sea';
   /** Kind of place, for the 3D miniature shown on arrival. */
   siteType?: 'city' | 'village' | 'palace' | 'temple' | 'mountain' | 'wilderness' | 'water' | 'camp';
+  /** New chapter: the narrative jumps here with no travel from the previous stop — no connecting line. */
+  breakBefore?: boolean;
 }
 
 export interface Stop extends RawStop {

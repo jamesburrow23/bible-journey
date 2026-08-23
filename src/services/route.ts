@@ -57,6 +57,10 @@ function catmullRom(anchors: LngLat[]): LngLat[] {
 export function legPathsFromStops(stops: Stop[]): LngLat[][] {
   const paths: LngLat[][] = [];
   for (let i = 1; i < stops.length; i++) {
+    if (stops[i].breakBefore) {
+      paths.push([]); // new chapter: no travel from the previous stop
+      continue;
+    }
     const from: LngLat = [stops[i - 1].lng, stops[i - 1].lat];
     const to: LngLat = [stops[i].lng, stops[i].lat];
     const via = (stops[i].via ?? []).map((w): LngLat => [w.lng, w.lat]);

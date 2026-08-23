@@ -61,6 +61,12 @@ function setColor(c: string): void {
           :title="stop.confidence != null ? `Identification confidence: ${stop.confidence}/1000` : undefined"
         >{{ badge[stop.coordSource] }}</span>
         <span
+          v-if="stop.breakBefore"
+          class="rounded-full px-2 text-[11px]"
+          style="background: #2e2a3a; color: #a89cc8"
+          title="New chapter — no travel line from the previous stop"
+        >§ new chapter</span>
+        <span
           v-if="stop.verseOk === false"
           class="rounded-full px-2 text-[11px]"
           style="background: #4a2a1a; color: #e0906f"
@@ -97,6 +103,15 @@ function setColor(c: string): void {
       </div>
       <input :value="stop.event" placeholder="What happens here (one sentence)" @input="stop.event = ($event.target as HTMLInputElement).value; emit('update')" />
       <input :value="stop.verseRef" placeholder="Gen 12:8" @input="stop.verseRef = ($event.target as HTMLInputElement).value; emit('update')" />
+      <label v-if="index > 0" class="flex items-center gap-2 text-sm" style="color: var(--muted)">
+        <input
+          type="checkbox"
+          class="!w-auto"
+          :checked="!!stop.breakBefore"
+          @change="stop.breakBefore = ($event.target as HTMLInputElement).checked || undefined; emit('update')"
+        />
+        New chapter — no travel line from the previous stop
+      </label>
       <div class="flex items-center gap-2">
         <span class="text-xs" style="color: var(--muted)">Trail color</span>
         <button

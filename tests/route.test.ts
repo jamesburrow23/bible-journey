@@ -40,6 +40,15 @@ describe('legPathsFromStops', () => {
     expect(Math.sign(d0)).not.toBe(Math.sign(d1)); // alternating sides
   });
 
+  it('emits an empty path for legs marked breakBefore (new chapter, no travel)', () => {
+    const stops = [stop('a', 0, 0), stop('b', 0, 10), { ...stop('c', 10, 20), breakBefore: true }, stop('d', 10, 30)];
+    const paths = legPathsFromStops(stops);
+    expect(paths).toHaveLength(3);
+    expect(paths[0].length).toBeGreaterThan(2); // a→b travels
+    expect(paths[1]).toEqual([]); // b ⇢ c is a scene cut
+    expect(paths[2].length).toBeGreaterThan(2); // c→d travels
+  });
+
   it('threads legs with via waypoints through every waypoint', () => {
     const via = [{ lat: 33.5, lng: 36.3 }]; // Damascus-ish detour
     const paths = legPathsFromStops([stop('Haran', 36.9, 39.0), stop('Shechem', 32.2, 35.3, via)]);
