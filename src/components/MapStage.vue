@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref, computed, watch } from 'vue';
 import maplibregl from 'maplibre-gl';
 import type { Journey, Stop } from '../types';
 import { loadParchmentStyle } from '../services/mapStyle';
 import { legPathsFromStops, slicePath, legLineString } from '../services/route';
 import { useSettings } from '../composables/useSettings';
+import { OVERLAYS } from '../overlays';
 
 const props = defineProps<{ journey: Journey | null; stepIndex: number }>();
 const { settings } = useSettings();
@@ -16,9 +17,15 @@ let labelMarkers: maplibregl.Marker[] = [];
 let cardMarker: maplibregl.Marker | null = null;
 const cardEl = document.createElement('div');
 cardEl.className = 'bj-card';
+let regionMarkers: maplibregl.Marker[] = [];
 let ready = false;
 let animFrame = 0;
 let suppressNextStepCamera = false;
+
+const overlayModel = computed({
+  get: () => settings.value.activeOverlay ?? '',
+  set: (v: string) => { settings.value.activeOverlay = v || null; },
+});
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -93,6 +100,24 @@ function updateCard(step: number): void {
       .addTo(map!);
   } else {
     cardMarker.setLngLat([s.lng, s.lat]);
+  }
+}
+
+function applyOverlay(): void {
+  if (!map || !ready) return;
+  const preset = OVERLAYS.find((o) => o.id === settings.value.activeOverlay);
+  setSource('overlay', preset?.regions ?? []);
+  regionMarkers.forEach((m) => m.remove());
+  regionMarkers = [];
+  for (const r of preset?.regions ?? []) {
+    const props = r.properties as any;
+    const el = document.createElement('div');
+    el.className = 'bj-region-label';
+    el.textContent = props.name;
+    el.style.color = props.stroke;
+    regionMarkers.push(
+      new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(props.labelAt).addTo(map!),
+    );
   }
 }
 
@@ -187,6 +212,20 @@ onMounted(async () => {
     attributionControl: { compact: true },
   });
   map.on('load', () => {
+    // Overlay layers first so historical regions sit under the journey.
+    map!.addSource('overlay', { type: 'geojson', data: EMPTY });
+    map!.addLayer({
+      id: 'overlay-fill',
+      type: 'fill',
+      source: 'overlay',
+      paint: { 'fill-color': ['get', 'fill'], 'fill-opacity': ['get', 'opacity'] },
+    });
+    map!.addLayer({
+      id: 'overlay-outline',
+      type: 'line',
+      source: 'overlay',
+      paint: { 'line-color': ['get', 'stroke'], 'line-width': 1.4, 'line-dasharray': [3, 2.5], 'line-opacity': 0.7 },
+    });
     for (const id of ['legs-static', 'leg-active']) {
       map!.addSource(id, { type: 'geojson', data: EMPTY });
       map!.addLayer({
@@ -225,6 +264,7 @@ onMounted(async () => {
     map!.on('zoom', syncLabelScale);
     syncLabelScale();
     ready = true;
+    applyOverlay();
     if (props.journey) { fitJourney(); renderStep(props.stepIndex, false, false); }
   });
 });
@@ -257,11 +297,19 @@ watch(() => settings.value.showMapCard, () => {
   updateCard(currentStep());
   showStops(currentStep()); // restore/remove the current stop's label to match
 });
+
+watch(() => settings.value.activeOverlay, applyOverlay);
 </script>
 
 <template>
   <div class="relative h-full w-full">
     <div ref="container" class="h-full w-full" />
+    <div class="absolute right-3 top-3 z-10">
+      <select v-model="overlayModel" class="bj-overlay-select" title="Historical overlay">
+        <option value="">No overlay</option>
+        <option v-for="o in OVERLAYS" :key="o.id" :value="o.id">{{ o.name }}</option>
+      </select>
+    </div>
     <div
       v-if="mapError"
       class="absolute inset-0 flex items-center justify-center p-8 text-center"
@@ -281,6 +329,26 @@ watch(() => settings.value.showMapCard, () => {
   white-space: nowrap;
   pointer-events: none;
 }
+.bj-region-label {
+  font-family: 'IM Fell English SC', serif;
+  font-size: 15px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  text-shadow: 0 0 3px var(--parchment), 0 0 6px var(--parchment), 0 0 9px var(--parchment);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.bj-overlay-select {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: 'Alegreya Sans', sans-serif;
+  font-size: 13px;
+}
+.bj-overlay-select:focus-visible { outline: 2px solid var(--gold); }
 .bj-card {
   max-width: 240px;
   background: linear-gradient(160deg, #f0e5c8, #e4d5af);
