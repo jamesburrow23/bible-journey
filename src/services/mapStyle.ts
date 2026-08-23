@@ -15,6 +15,18 @@ export function toParchment(style: any): any {
     } else if (layer.type === 'fill') {
       if (/water/i.test(layer.id)) {
         layer.paint['fill-color'] = '#A9C2B4';
+      } else if (/wood|forest/i.test(layer.id)) {
+        layer.paint['fill-color'] = '#A9B285';
+        layer.paint['fill-opacity'] = 0.55;
+      } else if (/grass|meadow|park|orchard|vineyard|farmland/i.test(layer.id)) {
+        layer.paint['fill-color'] = '#C7C797';
+        layer.paint['fill-opacity'] = 0.5;
+      } else if (/sand|beach|desert|bare/i.test(layer.id)) {
+        layer.paint['fill-color'] = '#E6D5A6';
+        layer.paint['fill-opacity'] = 0.6;
+      } else if (/residential|urban|suburb/i.test(layer.id)) {
+        layer.paint['fill-color'] = '#D9C497';
+        layer.paint['fill-opacity'] = 0.45;
       } else {
         layer.paint['fill-color'] = '#DFD0A4';
         layer.paint['fill-opacity'] = 0.5;

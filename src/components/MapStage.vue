@@ -505,6 +505,27 @@ onMounted(async () => {
     // Overlay layers slot in BENEATH the basemap's water so seas and lakes
     // clip the historical regions — a border can never trace over water.
     const waterId = map!.getStyle().layers?.find((l: any) => l.type === 'fill' && /water/i.test(l.id))?.id;
+    // Shaded relief from a dedicated DEM source (sharing the terrain's
+    // raster-dem source with a hillshade layer causes artifacts). Sits under
+    // the water fill so bathymetry doesn't get shaded.
+    map!.addSource('dem-hillshade', {
+      type: 'raster-dem',
+      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+      encoding: 'terrarium',
+      tileSize: 256,
+      maxzoom: 13,
+    });
+    map!.addLayer({
+      id: 'hillshade',
+      type: 'hillshade',
+      source: 'dem-hillshade',
+      paint: {
+        'hillshade-exaggeration': 0.45,
+        'hillshade-shadow-color': '#7a6742',
+        'hillshade-highlight-color': '#fdf6e0',
+        'hillshade-accent-color': '#857249',
+      },
+    }, waterId);
     map!.addSource('overlay', { type: 'geojson', data: EMPTY });
     map!.addLayer({
       id: 'overlay-fill',
