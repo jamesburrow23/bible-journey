@@ -103,7 +103,9 @@ function updateCard(step: number): void {
     img.alt = `The site of ${s.name} today`;
     img.loading = 'lazy';
     img.onerror = () => { img.remove(); credit.remove(); };
-    img.src = s.photo.url;
+    // Journeys saved before the size-whitelist fix carry 480px thumb URLs
+    // Wikimedia refuses; 500px is the nearest allowed size.
+    img.src = s.photo.url.replace('/480px-', '/500px-');
     cardEl.append(img, credit);
   }
   if (!cardMarker) {

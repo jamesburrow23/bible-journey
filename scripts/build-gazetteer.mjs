@@ -77,8 +77,14 @@ for (const a of readJsonl('ancient.jsonl')) {
   if (thumb?.image_id) {
     const img = images.get(thumb.image_id);
     if (img?.thumbnail_url_pattern) {
+      // Wikimedia only serves whitelisted thumb widths (250/330/500/960px)
+      // to hotlinkers, and refuses thumbs >= the source width — use the
+      // original file for small sources.
+      const url = img.width && img.width <= 500 && img.file_url
+        ? img.file_url
+        : img.thumbnail_url_pattern.replace('####', '500');
       photo = {
-        url: img.thumbnail_url_pattern.replace('####', '480'),
+        url,
         credit: thumb.credit ?? img.credit ?? '',
         creditUrl: thumb.credit_url ?? img.credit_url ?? '',
       };
