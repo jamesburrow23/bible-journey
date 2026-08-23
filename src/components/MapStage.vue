@@ -57,7 +57,9 @@ function showStops(step: number): void {
   })));
   labelMarkers.forEach((m) => m.remove());
   labelMarkers = [];
-  visible.forEach((s) => {
+  visible.forEach((s, i) => {
+    // The card names the current stop already — skip its label to avoid overlap.
+    if (i === step && settings.value.showMapCard) return;
     const el = document.createElement('div');
     el.className = 'bj-label';
     el.textContent = s.name;
@@ -251,7 +253,9 @@ watch(() => props.stepIndex, (n, o) => {
 });
 
 watch(() => settings.value.showMapCard, () => {
-  if (ready && props.journey) updateCard(currentStep());
+  if (!ready || !props.journey) return;
+  updateCard(currentStep());
+  showStops(currentStep()); // restore/remove the current stop's label to match
 });
 </script>
 
