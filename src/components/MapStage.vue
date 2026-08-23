@@ -5,11 +5,14 @@ import type { Journey, Stop } from '../types';
 import { loadParchmentStyle } from '../services/mapStyle';
 import { legPathsFromStops, slicePath, legLineString, pathLength, pointAlong, type LngLat } from '../services/route';
 import { useSettings } from '../composables/useSettings';
+import { useJourneys } from '../composables/useJourneys';
+import { routeEditing } from '../composables/useUiState';
 import { OVERLAYS } from '../overlays';
 
 const props = defineProps<{ journey: Journey | null; stepIndex: number }>();
 const emit = defineEmits<{ 'leg-complete': [] }>();
 const { settings } = useSettings();
+const { touchActive } = useJourneys();
 
 const container = ref<HTMLDivElement>();
 const mapError = ref('');
@@ -136,8 +139,103 @@ function applyOverlay(): void {
   }
 }
 
+// ---------- Route editing (drag the curve) ----------
+let handleMarkers: maplibregl.Marker[] = [];
+
+function viaOf(i: number): { lat: number; lng: number }[] {
+  return props.journey?.stops[i].via ?? [];
+}
+
+/** Show the whole route (optionally with one leg's via previewed mid-drag). */
+function renderEditLines(previewLeg?: number, previewVia?: { lat: number; lng: number }[]): void {
+  if (!map || !ready || !props.journey) return;
+  const stops = props.journey.stops.map((s, i) =>
+    previewLeg === i ? { ...s, via: previewVia } : s,
+  );
+  setSource('legs-static', legPathsFromStops(stops).map(legLineString));
+  setSource('leg-active', []);
+}
+
+function commitVia(leg: number, via: { lat: number; lng: number }[]): void {
+  if (!props.journey) return;
+  props.journey.stops[leg].via = via;
+  touchActive(); // autosaves; the stops watcher re-renders + rebuilds handles
+}
+
+function rebuildHandles(): void {
+  handleMarkers.forEach((m) => m.remove());
+  handleMarkers = [];
+  if (!routeEditing.value || !map || !ready || !props.journey) return;
+  const stops = props.journey.stops;
+  for (let i = 1; i < stops.length; i++) {
+    const via = viaOf(i);
+    const anchors: LngLat[] = [
+      [stops[i - 1].lng, stops[i - 1].lat],
+      ...via.map((w): LngLat => [w.lng, w.lat]),
+      [stops[i].lng, stops[i].lat],
+    ];
+    // Draggable handle per existing waypoint; double-click removes it.
+    via.forEach((w, vi) => {
+      const el = document.createElement('div');
+      el.className = 'bj-handle';
+      el.title = 'Drag to bend the route · double-click to remove';
+      const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([w.lng, w.lat]).addTo(map!);
+      m.on('drag', () => {
+        const p = m.getLngLat();
+        const next = via.map((x, xi) => (xi === vi ? { lat: p.lat, lng: p.lng } : x));
+        renderEditLines(i, next);
+      });
+      m.on('dragend', () => {
+        const p = m.getLngLat();
+        commitVia(i, via.map((x, xi) => (xi === vi ? { lat: p.lat, lng: p.lng } : x)));
+      });
+      el.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        commitVia(i, via.filter((_, xi) => xi !== vi));
+      });
+      handleMarkers.push(m);
+    });
+    // Ghost handle at each segment midpoint: drag it to add a new bend there.
+    for (let s = 0; s < anchors.length - 1; s++) {
+      const mid: LngLat = [(anchors[s][0] + anchors[s + 1][0]) / 2, (anchors[s][1] + anchors[s + 1][1]) / 2];
+      const el = document.createElement('div');
+      el.className = 'bj-handle bj-handle-ghost';
+      el.title = 'Drag to add a bend here';
+      const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(mid).addTo(map!);
+      const insertAt = s; // segment s sits before via[s]
+      m.on('drag', () => {
+        const p = m.getLngLat();
+        const next = [...via.slice(0, insertAt), { lat: p.lat, lng: p.lng }, ...via.slice(insertAt)];
+        renderEditLines(i, next);
+      });
+      m.on('dragend', () => {
+        const p = m.getLngLat();
+        commitVia(i, [...via.slice(0, insertAt), { lat: p.lat, lng: p.lng }, ...via.slice(insertAt)]);
+      });
+      handleMarkers.push(m);
+    }
+  }
+}
+
+function enterEditView(): void {
+  if (!map || !ready || !props.journey) return;
+  cancelAnimationFrame(animFrame);
+  updateCard(-1);
+  showStops(props.journey.stops.length - 1); // whole route visible while sculpting
+  renderEditLines();
+  rebuildHandles();
+}
+
+watch(routeEditing, (on) => {
+  if (!ready) return;
+  if (on) { fitJourney(); enterEditView(); }
+  else { rebuildHandles(); if (props.journey) renderStep(currentStep(), false, true); }
+});
+// ---------- end route editing ----------
+
 function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   if (!map || !ready || !props.journey) return;
+  if (routeEditing.value) { enterEditView(); return; }
   cancelAnimationFrame(animFrame);
   const stops = props.journey.stops;
   if (!stops.length) {
@@ -513,6 +611,19 @@ watch(() => settings.value.viewMode, () => applyViewMode(true));
   font-size: 13px;
 }
 .bj-overlay-select:focus-visible { outline: 2px solid var(--gold); }
+.bj-handle {
+  width: 13px; height: 13px; border-radius: 3px;
+  background: #f1e6c8; border: 2px solid var(--route);
+  box-shadow: 0 1px 4px rgba(40, 30, 10, 0.4);
+  cursor: grab;
+}
+.bj-handle:active { cursor: grabbing; }
+.bj-handle-ghost {
+  border-radius: 50%;
+  background: rgba(241, 230, 200, 0.55);
+  border: 1.5px dashed var(--route);
+  box-shadow: none;
+}
 .bj-card {
   max-width: 240px;
   background: linear-gradient(160deg, #f0e5c8, #e4d5af);

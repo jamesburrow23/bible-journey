@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useJourneys } from '../composables/useJourneys';
+import { routeEditing } from '../composables/useUiState';
 import StopRow from './StopRow.vue';
 
 const { activeJourney, isActiveSaved, saveActive, touchActive } = useJourneys();
@@ -29,8 +30,20 @@ function addStop(): void {
   <section v-if="activeJourney" class="border-b px-4 py-4" style="border-color: var(--line)">
     <div class="mb-2 flex items-center justify-between">
       <h2 class="sec-title">Stops — {{ activeJourney.name }}</h2>
-      <button class="text-sm" style="color: var(--gold)" @click="addStop">+ Add stop</button>
+      <span class="flex gap-3">
+        <button
+          class="text-sm"
+          :style="routeEditing ? 'color: var(--gold); font-weight: 700' : 'color: var(--gold)'"
+          :aria-pressed="routeEditing"
+          title="Drag handles on the map to sculpt each leg's curve; changes save with the journey"
+          @click="routeEditing = !routeEditing"
+        >{{ routeEditing ? '✔ Done editing' : '✏ Edit route' }}</button>
+        <button class="text-sm" style="color: var(--gold)" @click="addStop">+ Add stop</button>
+      </span>
     </div>
+    <p v-if="routeEditing" class="mb-2 text-xs" style="color: var(--faint)">
+      Drag a square handle to bend the route. Drag a dashed circle to add a bend. Double-click a square to remove it.
+    </p>
 
     <StopRow
       v-for="(stop, i) in activeJourney.stops"
