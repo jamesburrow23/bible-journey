@@ -102,7 +102,7 @@ let miniToken = 0;
 function updateMini(step: number): void {
   if (!map || !ready) return;
   const s: Stop | undefined = props.journey?.stops[step];
-  if (!s || settings.value.viewMode === 'map' || routeEditing.value) {
+  if (!s || settings.value.viewMode === 'map' || !settings.value.showMinis || routeEditing.value) {
     miniToken++;
     miniLayer.hide();
     return;
@@ -609,6 +609,8 @@ watch(() => settings.value.viewMode, () => {
   applyViewMode(true);
   updateMini(currentStep()); // appears/disappears with the mode
 });
+
+watch(() => settings.value.showMinis, () => updateMini(currentStep()));
 </script>
 
 <template>

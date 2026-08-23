@@ -61,6 +61,14 @@ const count = computed(() => props.journey?.stops.length ?? 0);
       title="Toggle the parchment info card on the map"
       @click="settings.showMapCard = !settings.showMapCard"
     >Card</button>
+    <button
+      v-if="settings.viewMode !== 'map'"
+      class="btn whitespace-nowrap"
+      :style="settings.showMinis ? 'border-color: var(--gold)' : ''"
+      :aria-pressed="settings.showMinis"
+      title="Toggle the 3D site miniatures shown on arrival"
+      @click="settings.showMinis = !settings.showMinis"
+    >⛰ 3D</button>
     <span class="flex overflow-hidden rounded border" style="border-color: var(--line)">
       <button
         v-for="m in VIEW_MODES"
