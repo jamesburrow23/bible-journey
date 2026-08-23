@@ -72,7 +72,7 @@ function clearAll(): void {
   labelMarkers = [];
   cardMarker?.remove();
   cardMarker = null;
-  if (ready) { setSource('legs-static', []); setSource('leg-active', []); setSource('leg-preview', []); setSource('stops', []); }
+  if (ready) { setSource('legs-static', []); setSource('leg-active', []); setSource('stops', []); }
 }
 
 function showStops(step: number): void {
@@ -86,6 +86,9 @@ function showStops(step: number): void {
   labelMarkers.forEach((m) => m.remove());
   labelMarkers = [];
   visible.forEach((s, i) => {
+    // At ground level, labels don't sit on the terrain and mislead on the
+    // horizon — in hike mode show only the current stop's name.
+    if (settings.value.viewMode === 'hike' && i !== step) return;
     // The card names the current stop already — skip its label to avoid overlap.
     if (i === step && settings.value.showMapCard) return;
     const el = document.createElement('div');
@@ -294,7 +297,6 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
   const staticCount = animate ? clamped - 1 : clamped;
   setSource('legs-static', paths.slice(0, Math.max(0, staticCount)).map(legLineString));
   setSource('leg-active', []);
-  setSource('leg-preview', []);
   showStops(clamped);
 
   const animating = animate && clamped > 0 && !reducedMotion;
@@ -341,7 +343,7 @@ function renderStep(step: number, animate: boolean, moveCamera: boolean): void {
       map.easeTo({ center: [s.lng, s.lat], zoom: 10.8, pitch: 62, duration });
     } else if (settings.value.viewMode === 'hike') {
       const s = stops[clamped];
-      map.easeTo({ center: [s.lng, s.lat], zoom: 13.2, pitch: 80, duration });
+      map.easeTo({ center: [s.lng, s.lat], zoom: 13.2, pitch: 84, duration });
     } else if (clamped === 0) {
       map.easeTo({ center: [stops[0].lng, stops[0].lat], zoom: Math.max(map.getZoom(), 5.5), duration });
     } else {
@@ -393,13 +395,15 @@ function runFlight(path: LngLat[], paths: LngLat[][], clamped: number): void {
  */
 function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
   const lenDeg = pathLength(path);
-  const durationMs = Math.min(30000, Math.max(6000, 2500 + lenDeg * 111 * 90));
+  const durationMs = Math.min(45000, Math.max(9000, 4000 + lenDeg * 111 * 160));
   const PREROLL = 1700;
   const start = pointAlong(path, 0.001);
   let smooth = start.bearing;
   let altSmooth: number | null = null;
-  setSource('leg-preview', [legLineString(path)]); // the trail ahead, faint
-  map!.easeTo({ center: path[0], zoom: 13.2, pitch: 80, bearing: smooth, duration: PREROLL - 100 });
+  // No labels mid-hike — they float off the terrain and mislead on the horizon.
+  labelMarkers.forEach((m) => m.remove());
+  labelMarkers = [];
+  map!.easeTo({ center: path[0], zoom: 13.2, pitch: 84, bearing: smooth, duration: PREROLL - 100 });
   const begin = performance.now() + PREROLL;
 
   const placeCamera = (cur: LngLat, bearingDeg: number, frac: number): void => {
@@ -415,13 +419,14 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
       0,
     );
     altSmooth = altSmooth === null ? ground : altSmooth + (ground - altSmooth) * 0.06;
-    const ahead = pointAlong(path, Math.min(1, frac + 0.05)).point;
+    // Look farther ahead and higher, so the view rides the horizon.
+    const ahead = pointAlong(path, Math.min(1, frac + 0.12)).point;
     const aheadElev = map!.queryTerrainElevation({ lng: ahead[0], lat: ahead[1] }) ?? 0;
     const camOpts = map!.calculateCameraOptionsFromTo(
       new maplibregl.LngLat(back[0], back[1]),
-      altSmooth + 180,
+      altSmooth + 150,
       new maplibregl.LngLat(ahead[0], ahead[1]),
-      aheadElev + 40,
+      aheadElev + 140,
     );
     map!.jumpTo(camOpts);
   };
@@ -438,6 +443,7 @@ function runHike(path: LngLat[], paths: LngLat[][], clamped: number): void {
     else {
       setSource('legs-static', paths.slice(0, clamped).map(legLineString));
       setSource('leg-active', []);
+      showStops(clamped); // arrival: the destination's label (only) returns
       updateCard(clamped);
       emit('leg-complete');
     }
@@ -506,16 +512,6 @@ onMounted(async () => {
         layout: { 'line-cap': 'round' },
       });
     }
-    // Faint preview of the leg ahead, shown while hiking so the trail is
-    // visible stretching toward the horizon before the solid line reaches it.
-    map!.addSource('leg-preview', { type: 'geojson', data: EMPTY });
-    map!.addLayer({
-      id: 'leg-preview',
-      type: 'line',
-      source: 'leg-preview',
-      paint: { 'line-color': '#A93226', 'line-width': LINE_WIDTH, 'line-dasharray': [2.2, 1.8], 'line-opacity': 0.35 },
-      layout: { 'line-cap': 'round' },
-    });
     map!.addSource('stops', { type: 'geojson', data: EMPTY });
     map!.addLayer({
       id: 'stop-halo',
@@ -632,7 +628,7 @@ function applyViewMode(animateCamera: boolean): void {
   const s = props.journey?.stops[currentStep()];
   if (animateCamera && s) {
     if (mode === 'flight') map.easeTo({ center: [s.lng, s.lat], zoom: 10.8, pitch: 62, duration: 1400 });
-    else map.easeTo({ center: [s.lng, s.lat], zoom: 13.2, pitch: 80, duration: 1400 });
+    else map.easeTo({ center: [s.lng, s.lat], zoom: 13.2, pitch: 84, duration: 1400 });
   }
 }
 
