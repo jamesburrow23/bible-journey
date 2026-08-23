@@ -704,6 +704,7 @@ watch(() => settings.value.viewMode, () => {
 
 <style>
 .bj-label {
+  z-index: 1;
   font-family: 'IM Fell English', serif;
   font-size: var(--bj-label-size, 16px);
   color: var(--map-ink);
@@ -712,6 +713,7 @@ watch(() => settings.value.viewMode, () => {
   pointer-events: none;
 }
 .bj-hit {
+  z-index: 2;
   width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
   cursor: grab;
@@ -762,6 +764,7 @@ watch(() => settings.value.viewMode, () => {
   flex: none;
 }
 .bj-card {
+  z-index: 3; /* the card always sits above map labels */
   max-width: 310px;
   background: linear-gradient(160deg, #f0e5c8, #e4d5af);
   border: 1px solid #b09a68;
